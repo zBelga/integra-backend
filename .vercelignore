@@ -1,0 +1,7 @@
+backend/
+database/
+scripts/
+dist-server/
+*.bat
+DEPLOY.md
+railway.json

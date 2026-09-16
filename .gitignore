@@ -1,0 +1,40 @@
+# Dependencias
+node_modules/
+
+# Build
+build/
+dist/
+dist-server/
+coverage/
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# VARIAVEIS DE AMBIENTE - NUNCA VERSIONAR
+.env
+.env.local
+.env.production
+.env*.local
+
+# Banco de dados runtime
+database/*.sqlite
+database/*.sqlite-journal
+database/*.sqlite-shm
+database/*.sqlite-wal
+
+# TypeScript
+*.js.map
+backend/dist/
+
+# Vite
+frontend/.vite/
+frontend/dist/
+
+# Deploy
+.vercel
+.railway
