@@ -36,7 +36,7 @@ export const AdminSubModuleView: React.FC<AdminSubModuleViewProps> = ({
   const loadColaboradores = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await fetchColaboradores({ search, limit: 100 });
+      const res = await fetchColaboradores({ search, limit: 500 });
       setColaboradores(res.data);
       setTotal(res.pagination.total);
     } catch {

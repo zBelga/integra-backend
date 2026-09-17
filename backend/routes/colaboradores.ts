@@ -7,7 +7,7 @@ const router = Router();
 router.get('/', async (req: Request, res: Response) => {
   try {
     const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string, 10) || 25));
+    const limit = Math.min(500, Math.max(1, parseInt(req.query.limit as string, 10) || 25));
     const offset = (page - 1) * limit;
     const search = ((req.query.search as string) || '').trim();
     const obraId = ((req.query.obra as string) || '').trim();
@@ -32,7 +32,7 @@ router.get('/', async (req: Request, res: Response) => {
     const rows = await queryRows(`
       SELECT c.*, o.nome as obra_nome, o.codigo as obra_codigo
       FROM colaboradores c
-      INNER JOIN obras o ON c.obra_id = o.id
+      LEFT JOIN obras o ON c.obra_id = o.id
       ${whereSQL}
       ORDER BY c.created_at DESC
       LIMIT ? OFFSET ?
@@ -54,7 +54,7 @@ router.get('/:id', async (req: Request, res: Response) => {
     const rows = await queryRows(`
       SELECT c.*, o.nome as obra_nome, o.codigo as obra_codigo
       FROM colaboradores c
-      INNER JOIN obras o ON c.obra_id = o.id
+      LEFT JOIN obras o ON c.obra_id = o.id
       WHERE c.id = ?
     `, [req.params.id]);
     if (rows.length === 0) return res.status(404).json({ success: false, error: 'Colaborador não encontrado.' });

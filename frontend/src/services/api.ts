@@ -666,6 +666,28 @@ export interface UploadDocumentoPayload {
   observacoes?: string;
 }
 
+export interface DocumentoResumo {
+  id: string;
+  tipo: string;
+  data_vencimento: string;
+}
+
+export interface ResumoDocumentos {
+  [colaboradorId: string]: {
+    total: number;
+    tipos: string[];
+    docs: DocumentoResumo[];
+  };
+}
+
+/** Resumo de documentos de TODOS os colaboradores numa requisicao so */
+export async function fetchResumoDocumentos(): Promise<{ success: boolean; data: ResumoDocumentos }> {
+  const res = await apiFetch('/api/documentos/resumo');
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Erro ao carregar resumo de documentos');
+  return json;
+}
+
 export async function fetchDocumentosColaborador(
   colaboradorId: string
 ): Promise<{ success: boolean; data: import('../types').Documento[] }> {

@@ -14,6 +14,50 @@ function generateId() {
   return `doc-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
+/**
+ * GET /api/documentos/resumo
+ *
+ * Devolve, numa única requisição, o resumo de documentos de TODOS os
+ * colaboradores — usado pela tela de Documentos para montar a lista.
+ *
+ * Antes a tela fazia uma requisição por colaborador (N+1): com 300
+ * colaboradores seriam 300 chamadas, que estouram o rate limit (300/min)
+ * e fazem a tela exibir contagens zeradas. Agora é uma só.
+ *
+ * Formato: { "<colaborador_id>": { total, tipos: [], vencimentos: [] } }
+ */
+router.get('/resumo', async (_req: Request, res: Response) => {
+  try {
+    const supabase = getSupabase();
+
+    const { data, error } = await supabase
+      .from('documentos')
+      .select('id, colaborador_id, tipo, data_vencimento');
+
+    if (error) throw error;
+
+    type DocLeve = { id: string; tipo: string; data_vencimento: string };
+    const resumo: Record<string, { total: number; tipos: string[]; docs: DocLeve[] }> = {};
+
+    for (const doc of data || []) {
+      const id = doc.colaborador_id;
+      if (!id) continue;
+      if (!resumo[id]) resumo[id] = { total: 0, tipos: [], docs: [] };
+      resumo[id].total++;
+      if (doc.tipo) resumo[id].tipos.push(doc.tipo);
+      resumo[id].docs.push({
+        id: doc.id,
+        tipo: doc.tipo || '',
+        data_vencimento: doc.data_vencimento || '',
+      });
+    }
+
+    res.json({ success: true, data: resumo });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // GET /api/documentos/colaborador/:id — lista documentos de um colaborador
 router.get('/colaborador/:id', async (req: Request, res: Response) => {
   try {

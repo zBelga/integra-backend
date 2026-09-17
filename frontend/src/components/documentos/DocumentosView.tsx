@@ -15,8 +15,8 @@ import {
   X,
 } from 'lucide-react';
 import { ColaboradorPerfil } from './ColaboradorPerfil';
-import { fetchColaboradores, fetchDocumentosColaborador } from '../../services/api';
-import { Colaborador, Documento } from '../../types';
+import { fetchColaboradores, fetchResumoDocumentos, DocumentoResumo } from '../../services/api';
+import { Colaborador } from '../../types';
 import {
   DOCS_OBRIGATORIOS,
   getStatusVencimento,
@@ -27,7 +27,7 @@ import { formatDateBR } from '../../utils/cpfMask';
 
 interface ColaboradorComDocs {
   colaborador: Colaborador;
-  documentos: Documento[];
+  documentos: DocumentoResumo[];
   totalDocs: number;
   vencidos: number;
   aVencer: number;
@@ -61,39 +61,45 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({ selectedEmpresaI
   const loadDados = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await fetchColaboradores({ search: '', limit: 300 });
-      const base: ColaboradorComDocs[] = res.data.map((col: Colaborador) => ({
-        colaborador: col,
-        documentos: [],
-        totalDocs: 0,
-        vencidos: 0,
-        aVencer: 0,
-        pendentes: DOCS_OBRIGATORIOS.map(d => d.codigo),
-        carregando: true,
-      }));
-      setLista(base);
-      setIsLoading(false);
+      // TODO o efetivo entra na lista — mesmo quem não tem nenhum documento
+      // anexado e mesmo quem está sem obra vinculada.
+      const res = await fetchColaboradores({ search: '', limit: 500 });
+      const colaboradores: Colaborador[] = res.data || [];
 
-      const comDocs = await Promise.all(
-        base.map(async (item) => {
-          try {
-            const docRes = await fetchDocumentosColaborador(item.colaborador.id);
-            const docs = docRes.data || [];
-            const vencidos = docs.filter(d => getStatusVencimento(d.data_vencimento) === 'vencido').length;
-            const aVencer = docs.filter(d => getStatusVencimento(d.data_vencimento) === 'a_vencer').length;
-            const tiposPresentes = new Set(docs.map(d => d.tipo));
-            const pendentes = DOCS_OBRIGATORIOS
-              .filter(ob => !tiposPresentes.has(ob.codigo) && !tiposPresentes.has(ob.nome))
-              .map(ob => ob.codigo);
-            return { ...item, documentos: docs, totalDocs: docs.length, vencidos, aVencer, pendentes, carregando: false };
-          } catch {
-            return { ...item, carregando: false };
-          }
-        })
-      );
-      setLista(comDocs);
-    } catch {
+      // Uma única requisição traz o resumo de todos (antes era uma por pessoa)
+      let resumo: Record<string, { total: number; tipos: string[]; docs: DocumentoResumo[] }> = {};
+      try {
+        const r = await fetchResumoDocumentos();
+        resumo = r.data || {};
+      } catch (e) {
+        // Sem o resumo a lista ainda aparece, só sem as contagens
+        console.warn('Não foi possível carregar o resumo de documentos:', e);
+      }
+
+      const lista: ColaboradorComDocs[] = colaboradores.map((col) => {
+        const r = resumo[col.id];
+        const docs = r?.docs || [];
+        const vencimentos = docs.map(d => d.data_vencimento).filter(Boolean);
+        const tiposPresentes = new Set(r?.tipos || []);
+
+        return {
+          colaborador: col,
+          documentos: docs,
+          totalDocs: r?.total || 0,
+          vencidos: vencimentos.filter(v => getStatusVencimento(v) === 'vencido').length,
+          aVencer: vencimentos.filter(v => getStatusVencimento(v) === 'a_vencer').length,
+          pendentes: DOCS_OBRIGATORIOS
+            .filter(ob => !tiposPresentes.has(ob.codigo) && !tiposPresentes.has(ob.nome))
+            .map(ob => ob.codigo),
+          carregando: false,
+        };
+      });
+
+      setLista(lista);
+    } catch (e) {
+      console.error('Erro ao carregar colaboradores:', e);
       setLista([]);
+    } finally {
       setIsLoading(false);
     }
   }, []);
@@ -112,7 +118,7 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({ selectedEmpresaI
 
   // ─── Alertas: documentos vencendo nos próximos 30 dias ───
   const alertas = useMemo(() => {
-    const items: { colaborador: Colaborador; doc: Documento; dias: number }[] = [];
+    const items: { colaborador: Colaborador; doc: DocumentoResumo; dias: number }[] = [];
     lista.forEach(item => {
       item.documentos.forEach(doc => {
         const st = getStatusVencimento(doc.data_vencimento);
