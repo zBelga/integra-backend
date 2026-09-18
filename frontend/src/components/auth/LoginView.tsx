@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback, memo } from 'react';
 import { Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle, ShieldCheck, X } from 'lucide-react';
 import { loginUser } from '../../services/api';
+import { UsuarioSessao } from '../../types';
 
 interface LoginViewProps {
-  onLogin: (credentials: { email: string; name: string; role: string }) => void;
+  onLogin: (credentials: UsuarioSessao) => void;
 }
 
 const EMAIL_SALVO = 'saved_user_email';
@@ -102,10 +103,19 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
           /* ignora */
         }
 
+        // perfil e permissoes decidem o que aparece no menu lateral
+        const permissoes = Array.isArray(result.user?.permissoes)
+          ? result.user.permissoes
+          : typeof result.user?.permissoes === 'string'
+            ? JSON.parse(result.user.permissoes || '[]')
+            : [];
+
         onLogin({
-          email: result.user?.email || emailNormalizado,
-          name:  result.user?.nome  || 'Usuário',
-          role:  result.user?.cargo || result.user?.perfil || 'Operacional',
+          email:      result.user?.email || emailNormalizado,
+          name:       result.user?.nome  || 'Usuário',
+          role:       result.user?.cargo || result.user?.perfil || 'Operacional',
+          perfil:     result.user?.perfil,
+          permissoes,
         });
       } catch {
         setErrorMessage('Não foi possível conectar ao servidor. Verifique sua internet e tente novamente.');

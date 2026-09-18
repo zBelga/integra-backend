@@ -12,8 +12,10 @@ import {
   Send,
   Sliders,
   FolderOpen,
+  HardHat,
+  Lock,
 } from 'lucide-react';
-import { ActiveView, Empresa } from '../../types';
+import { ActiveView, ChaveModulo, Empresa, UsuarioSessao } from '../../types';
 import { getCompanyTheme } from '../../utils/theme';
 
 interface LeftSidebarProps {
@@ -24,42 +26,40 @@ interface LeftSidebarProps {
   isMobileOpen?: boolean;
   onCloseMobile?: () => void;
   selectedEmpresa?: Empresa | null;
-  currentUser?: { email: string; name: string; role: string };
+  currentUser?: UsuarioSessao;
   onLogout?: () => void;
 }
 
-/** Um item do menu */
 interface ItemNav {
   view: ActiveView;
   label: string;
   icon: React.ElementType;
-  /** Views que também devem deixar este item aceso */
+  /** Views que também deixam este item aceso */
   tambemAtivoEm?: ActiveView[];
   titulo?: string;
-}
-
-/** Um grupo de itens */
-interface GrupoNav {
-  titulo: string;
-  itens: ItemNav[];
+  /** Aparece no menu mas ainda não tem tela */
+  emBreve?: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────
-// ESTRUTURA DO MENU
-// Para adicionar/mover um item, mexa só aqui.
+// ESTRUTURA DOS MÓDULOS
+// A lateral mostra APENAS as telas do módulo em que o usuário está.
+// Para trocar de módulo ele volta em "Módulos do Sistema".
+// Para adicionar uma tela, mexa só aqui.
 // ─────────────────────────────────────────────────────────────
 
-const NAVEGACAO: ItemNav[] = [
-  { view: 'empresas',  label: 'Empresas',           icon: Briefcase,       titulo: 'Selecionar Empresa' },
-  { view: 'dashboard', label: 'Módulos do Sistema', icon: LayoutDashboard, titulo: 'Voltar ao painel de módulos' },
-];
-
-const GRUPOS: GrupoNav[] = [
-  {
-    titulo: 'Pessoal',
+const MODULOS: Record<ChaveModulo, { titulo: string; itens: ItemNav[] }> = {
+  administrativo: {
+    titulo: 'Administrativo',
     itens: [
-      { view: 'administrativo', label: 'Admissões',  icon: Sliders,    titulo: 'Admissões' },
-      { view: 'efetivo',        label: 'Efetivo',    icon: Users,      titulo: 'Quadro de Efetivo' },
+      { view: 'administrativo', label: 'Admissões',       icon: Sliders, titulo: 'Admissões' },
+      { view: 'efetivo',        label: 'Efetivo Geral',   icon: Users,   titulo: 'Quadro geral de efetivo' },
+      { view: 'efetivo-obra',   label: 'Efetivo por Obra', icon: HardHat, titulo: 'Efetivo agrupado por obra', emBreve: true },
+    ],
+  },
+  documentacoes: {
+    titulo: 'Documentações',
+    itens: [
       {
         view: 'documentos',
         label: 'Documentos',
@@ -69,14 +69,43 @@ const GRUPOS: GrupoNav[] = [
       },
     ],
   },
-  {
-    titulo: 'Governança',
-    itens: [
-      { view: 'solicitacoes', label: 'Solicitações',       icon: Send,        titulo: 'Central de Solicitações & Aprovações' },
-      { view: 'permissoes',   label: 'Permissões por Cargo', icon: ShieldCheck, titulo: 'Permissões e Aprovações por Cargo' },
-    ],
-  },
+  seguranca:    { titulo: 'Segurança',    itens: [] },
+  almoxarifado: { titulo: 'Almoxarifado', itens: [] },
+};
+
+/** De qual módulo cada tela faz parte */
+const MODULO_DA_VIEW: Partial<Record<ActiveView, ChaveModulo>> = {
+  administrativo:       'administrativo',
+  efetivo:              'administrativo',
+  'efetivo-obra':       'administrativo',
+  documentos:           'documentacoes',
+  'colaborador-perfil': 'documentacoes',
+  seguranca:            'seguranca',
+  almoxarifado:         'almoxarifado',
+};
+
+const NAVEGACAO: ItemNav[] = [
+  { view: 'empresas',  label: 'Empresas',           icon: Briefcase,       titulo: 'Selecionar Empresa' },
+  { view: 'dashboard', label: 'Módulos do Sistema', icon: LayoutDashboard, titulo: 'Voltar ao painel de módulos' },
 ];
+
+const EMAIL_MASTER = 'fabriciooliveira2431@gmail.com';
+
+/** Painel Master: exclusivo do administrador geral */
+export function ehMaster(u?: UsuarioSessao): boolean {
+  if (!u) return false;
+  return u.perfil === 'master_admin' || u.email?.toLowerCase() === EMAIL_MASTER;
+}
+
+/**
+ * Solicitações é liberado por permissão de cargo — encarregados enxergam,
+ * os demais não. O master vê sempre.
+ */
+export function podeVerSolicitacoes(u?: UsuarioSessao): boolean {
+  if (!u) return false;
+  if (ehMaster(u)) return true;
+  return Array.isArray(u.permissoes) && u.permissoes.includes('solicitacoes');
+}
 
 export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   currentView,
@@ -86,11 +115,17 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   isMobileOpen = false,
   onCloseMobile,
   selectedEmpresa,
-  currentUser = { email: 'fabriciooliveira2431@gmail.com', name: 'Fabrício Oliveira', role: 'Administrador Geral' },
+  currentUser = { email: EMAIL_MASTER, name: 'Fabrício Oliveira', role: 'Administrador Geral' },
   onLogout,
 }) => {
   const companyColor = selectedEmpresa?.corPrimaria || '#176B87';
   const theme = getCompanyTheme(companyColor);
+
+  const moduloAberto = MODULO_DA_VIEW[currentView];
+  const modulo = moduloAberto ? MODULOS[moduloAberto] : null;
+
+  const master = ehMaster(currentUser);
+  const verSolicitacoes = podeVerSolicitacoes(currentUser);
 
   const handleNavClick = (view: ActiveView) => {
     onNavigate(view);
@@ -100,11 +135,30 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   const estaAtivo = (item: ItemNav) =>
     currentView === item.view || (item.tambemAtivoEm?.includes(currentView) ?? false);
 
-  /** Botão de navegação — mesma aparência em todos os grupos */
   const BotaoNav: React.FC<{ item: ItemNav }> = ({ item }) => {
-    const ativo = estaAtivo(item);
     const Icone = item.icon;
 
+    // Item sem tela ainda: visível mas não clicável
+    if (item.emBreve) {
+      return (
+        <div
+          title={isCollapsed ? `${item.label} (Em breve)` : undefined}
+          className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold text-[#A3B1BD] cursor-not-allowed select-none"
+        >
+          <div className="flex items-center space-x-3 min-w-0">
+            <Icone className="w-4 h-4 flex-shrink-0 text-[#B4C0CB]" />
+            {!isCollapsed && <span className="truncate">{item.label}</span>}
+          </div>
+          {!isCollapsed && (
+            <span className="text-[9px] font-bold px-1.5 py-0.5 bg-[#F4F6F8] text-[#8995A1] border border-[#DDE3E8] rounded shrink-0">
+              Em breve
+            </span>
+          )}
+        </div>
+      );
+    }
+
+    const ativo = estaAtivo(item);
     return (
       <button
         id={`sidebar-nav-${item.view}`}
@@ -125,7 +179,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
     );
   };
 
-  /** Rótulo de seção — vira um traço fino quando o menu está recolhido */
   const TituloSecao: React.FC<{ texto: string }> = ({ texto }) =>
     isCollapsed ? (
       <div className="mx-3 my-1 border-t border-[#DDE3E8]" aria-hidden="true" />
@@ -199,22 +252,55 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
 
         {/* ── Navegação ── */}
         <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-5 custom-scrollbar bg-white">
-          {/* Topo: trocar de empresa / voltar aos módulos */}
           <div className="space-y-1">
             <TituloSecao texto="Navegação" />
             {NAVEGACAO.map(item => <BotaoNav key={item.view} item={item} />)}
           </div>
 
-          {/* Grupos do módulo ativo */}
-          {GRUPOS.map(grupo => (
-            <div key={grupo.titulo} className="space-y-1 pt-1 border-t border-[#F0F3F5]">
-              <TituloSecao texto={grupo.titulo} />
-              {grupo.itens.map(item => <BotaoNav key={item.view} item={item} />)}
+          {/* Telas do módulo aberto — some quando está no dashboard */}
+          {modulo && modulo.itens.length > 0 && (
+            <div className="space-y-1 pt-1 border-t border-[#F0F3F5]">
+              <TituloSecao texto={modulo.titulo} />
+              {modulo.itens.map(item => <BotaoNav key={item.view} item={item} />)}
             </div>
-          ))}
+          )}
 
-          {/* Painel master — só para o administrador geral */}
-          {currentUser.email.toLowerCase() === 'fabriciooliveira2431@gmail.com' && (
+          {/* Módulo aberto ainda sem telas */}
+          {modulo && modulo.itens.length === 0 && !isCollapsed && (
+            <div className="pt-1 border-t border-[#F0F3F5]">
+              <TituloSecao texto={modulo.titulo} />
+              <p className="px-3 text-[11px] text-[#8995A1] leading-relaxed">
+                Módulo em desenvolvimento.
+              </p>
+            </div>
+          )}
+
+          {/* Solicitações — liberado por permissão de cargo */}
+          {verSolicitacoes && (
+            <div className="space-y-1 pt-2 border-t border-[#DDE3E8]">
+              {!isCollapsed ? (
+                <div className="flex items-center justify-between px-3 mb-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#D97706] flex items-center space-x-1">
+                    <Lock className="w-3 h-3" />
+                    <span>Aprovações</span>
+                  </span>
+                  <span className="text-[9px] font-bold px-1.5 py-0.2 bg-[#FEF3C7] text-[#B45309] border border-[#FDE68A] rounded">
+                    Cargo
+                  </span>
+                </div>
+              ) : (
+                <div className="flex justify-center mb-1" title="Aprovações">
+                  <Lock className="w-3.5 h-3.5 text-[#D97706]" />
+                </div>
+              )}
+              <BotaoNav
+                item={{ view: 'solicitacoes', label: 'Solicitações', icon: Send, titulo: 'Central de Solicitações & Aprovações' }}
+              />
+            </div>
+          )}
+
+          {/* Painel Master — exclusivo do administrador geral */}
+          {master && (
             <div className="space-y-1 pt-2 border-t border-[#DDE3E8]">
               {!isCollapsed ? (
                 <div className="flex items-center justify-between px-3 mb-2">
@@ -232,14 +318,13 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                 </div>
               )}
 
-              <BotaoNav
-                item={{ view: 'usuarios', label: 'Gestão de Usuários', icon: Users, titulo: 'Gestão de Usuários (Master)' }}
-              />
+              <BotaoNav item={{ view: 'usuarios',   label: 'Gestão de Usuários',    icon: Users,       titulo: 'Gestão de Usuários (Master)' }} />
+              <BotaoNav item={{ view: 'permissoes', label: 'Permissões por Cargo',  icon: ShieldCheck, titulo: 'Permissões e Aprovações por Cargo' }} />
             </div>
           )}
         </nav>
 
-        {/* ── Rodapé: usuário ── */}
+        {/* ── Rodapé ── */}
         <div className="p-3 border-t border-[#DDE3E8] bg-[#F8FAFB]">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2.5 min-w-0">

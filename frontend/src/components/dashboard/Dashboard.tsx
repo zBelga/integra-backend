@@ -1,6 +1,6 @@
 import React from 'react';
-import { UserCheck, Package, ShieldAlert, FileText, ArrowRight, Lock, RefreshCw, Building2, Palette, Users, Crown, ShieldCheck, Send, Sliders, FolderOpen } from 'lucide-react';
-import { ActiveView, Empresa } from '../../types';
+import { ArrowRight, Lock, RefreshCw, Crown, ShieldCheck, Sliders, FolderOpen, HardHat, Package } from 'lucide-react';
+import { ActiveView, ChaveModulo, Empresa } from '../../types';
 import { getCompanyTheme } from '../../utils/theme';
 
 interface DashboardProps {
@@ -9,6 +9,63 @@ interface DashboardProps {
   onSwitchEmpresa?: () => void;
   currentUser?: { email: string; name: string; role: string };
 }
+
+/** Um módulo do sistema mostrado no painel */
+interface ModuloCard {
+  chave: ChaveModulo;
+  /** Tela que abre ao clicar */
+  view: ActiveView;
+  titulo: string;
+  descricao: string;
+  icon: React.ElementType;
+  cor: string;
+  bg: string;
+  borda: string;
+  /** Telas que aparecem na lateral depois de entrar */
+  telas: string[];
+  emBreve?: boolean;
+}
+
+const MODULOS: ModuloCard[] = [
+  {
+    chave: 'administrativo',
+    view: 'administrativo',
+    titulo: 'ADMINISTRATIVO',
+    descricao: 'Admissões, quadro de efetivo e alocação de colaboradores em obras.',
+    icon: Sliders,
+    cor: '#176B87', bg: '#E8F3F6', borda: '#C6E3EB',
+    telas: ['Admissões', 'Efetivo Geral', 'Efetivo por Obra'],
+  },
+  {
+    chave: 'documentacoes',
+    view: 'documentos',
+    titulo: 'DOCUMENTAÇÕES',
+    descricao: 'Documentos por colaborador, controle de vencimentos e pendências obrigatórias.',
+    icon: FolderOpen,
+    cor: '#7C3AED', bg: '#EDE9FE', borda: '#DDD6FE',
+    telas: ['Documentos'],
+  },
+  {
+    chave: 'seguranca',
+    view: 'seguranca',
+    titulo: 'SEGURANÇA',
+    descricao: 'Gestão de EPIs, treinamentos e normas regulamentadoras.',
+    icon: HardHat,
+    cor: '#D97706', bg: '#FEF3C7', borda: '#FDE68A',
+    telas: [],
+    emBreve: true,
+  },
+  {
+    chave: 'almoxarifado',
+    view: 'almoxarifado',
+    titulo: 'ALMOXARIFADO',
+    descricao: 'Estoque de materiais, fornecedores, entradas e saídas.',
+    icon: Package,
+    cor: '#159A72', bg: '#E8F6F1', borda: '#B8E8D9',
+    telas: [],
+    emBreve: true,
+  },
+];
 
 export const Dashboard: React.FC<DashboardProps> = ({ 
   onSelectModule,
@@ -53,7 +110,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-lg font-bold text-[#17212B]">{selectedEmpresa.nome}</h2>
                 <span className="bg-[#E8F6F1] text-[#159A72] text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-[#B8E8D9]">
-                  {selectedEmpresa.status.toUpperCase()}
+                  {(selectedEmpresa.status || 'ativa').toUpperCase()}
                 </span>
                 <span 
                   className="text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center space-x-1"
@@ -143,287 +200,106 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       )}
 
-      {/* Grid of Module Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {/* 1. ADMISSÕES */}
-        <div
-          onClick={() => onSelectModule('administrativo')}
-          className="group relative bg-white rounded-2xl border border-[#DDE3E8] p-6 shadow-xs hover:shadow-md transition-all cursor-pointer flex flex-col justify-between"
-          onMouseEnter={(e) => {
-            e.currentTarget.style.borderColor = companyColor;
-            e.currentTarget.style.boxShadow = theme.shadowLight;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.borderColor = '#DDE3E8';
-            e.currentTarget.style.boxShadow = 'none';
-          }}
-        >
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <div 
-                className="w-12 h-12 rounded-xl flex items-center justify-center border transition-colors shadow-2xs"
-                style={{
-                  backgroundColor: theme.bgLight,
-                  borderColor: theme.borderLight,
-                  color: companyColor,
-                }}
-              >
-                <UserCheck className="w-6 h-6" />
+      {/* ─────────────────────────────────────────────────────────
+          OS 4 MÓDULOS DO SISTEMA
+          Ao clicar, a barra lateral passa a mostrar as telas
+          daquele módulo. Para trocar, volta-se aqui.
+          Para adicionar um módulo, basta acrescentar ao array.
+         ───────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        {MODULOS.map(mod => {
+          const Icone = mod.icon;
+          const disponivel = !mod.emBreve;
+
+          return (
+            <div
+              key={mod.chave}
+              id={`card-modulo-${mod.chave}`}
+              onClick={disponivel ? () => onSelectModule(mod.view) : undefined}
+              role={disponivel ? 'button' : undefined}
+              tabIndex={disponivel ? 0 : undefined}
+              onKeyDown={
+                disponivel
+                  ? e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectModule(mod.view); } }
+                  : undefined
+              }
+              className={`group relative rounded-2xl border p-6 flex flex-col justify-between transition-all ${
+                disponivel
+                  ? 'bg-white border-[#DDE3E8] shadow-xs hover:shadow-md cursor-pointer'
+                  : 'bg-[#F8FAFB] border-[#DDE3E8] opacity-70 cursor-not-allowed select-none'
+              }`}
+              onMouseEnter={disponivel ? (e) => {
+                e.currentTarget.style.borderColor = companyColor;
+                e.currentTarget.style.boxShadow = theme.shadowLight;
+              } : undefined}
+              onMouseLeave={disponivel ? (e) => {
+                e.currentTarget.style.borderColor = '#DDE3E8';
+                e.currentTarget.style.boxShadow = 'none';
+              } : undefined}
+            >
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <div
+                    className="w-12 h-12 rounded-xl flex items-center justify-center border shadow-2xs"
+                    style={
+                      disponivel
+                        ? { backgroundColor: mod.bg, borderColor: mod.borda, color: mod.cor }
+                        : { backgroundColor: '#FFFFFF', borderColor: '#DDE3E8', color: '#8995A1' }
+                    }
+                  >
+                    <Icone className="w-6 h-6" />
+                  </div>
+
+                  {disponivel ? (
+                    <span className="bg-[#E8F6F1] text-[#159A72] text-[11px] font-bold px-2.5 py-1 rounded-full border border-[#B8E8D9] uppercase tracking-wider">
+                      Ativo
+                    </span>
+                  ) : (
+                    <span className="bg-[#F4F6F8] text-[#8995A1] text-[11px] font-bold px-2.5 py-1 rounded-full border border-[#DDE3E8] uppercase tracking-wider flex items-center gap-1">
+                      <Lock className="w-3 h-3" /> Em breve
+                    </span>
+                  )}
+                </div>
+
+                <h2 className={`text-base font-bold ${disponivel ? 'text-[#17212B]' : 'text-[#687582]'}`}>
+                  {mod.titulo}
+                </h2>
+                <p className={`text-xs mt-2 leading-relaxed ${disponivel ? 'text-[#687582]' : 'text-[#8995A1]'}`}>
+                  {mod.descricao}
+                </p>
+
+                {/* O que tem dentro do módulo */}
+                {disponivel && mod.telas.length > 0 && (
+                  <ul className="mt-4 space-y-1.5">
+                    {mod.telas.map(tela => (
+                      <li key={tela} className="flex items-center gap-2 text-[11px] text-[#687582]">
+                        <span
+                          className="w-1 h-1 rounded-full shrink-0"
+                          style={{ backgroundColor: mod.cor }}
+                        />
+                        {tela}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
-              <span className="bg-[#E8F6F1] text-[#159A72] text-[11px] font-bold px-2.5 py-1 rounded-full border border-[#B8E8D9] uppercase tracking-wider">
-                Ativo
-              </span>
-            </div>
 
-            <h2 className="text-base font-bold text-[#17212B] transition-colors">
-              ADMISSÕES
-            </h2>
-            <p className="text-xs text-[#687582] mt-2 leading-relaxed">
-              Cadastro de pré-admissões, vinculação de obras e gestão de contratações para {selectedEmpresa ? selectedEmpresa.nome : 'a empresa'}.
-            </p>
-          </div>
-
-          <div 
-            className="mt-6 pt-4 border-t border-[#DDE3E8] flex items-center justify-between text-xs font-semibold transition-colors"
-            style={{ color: companyColor }}
-          >
-            <span>Acessar Admissões</span>
-            <ArrowRight className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" />
-          </div>
-        </div>
-
-        {/* 2. EFETIVO */}
-        <div
-          onClick={() => onSelectModule('efetivo')}
-          className="group relative bg-white rounded-2xl border border-[#DDE3E8] p-6 shadow-xs hover:shadow-md transition-all cursor-pointer flex flex-col justify-between"
-          onMouseEnter={(e) => {
-            e.currentTarget.style.borderColor = companyColor;
-            e.currentTarget.style.boxShadow = theme.shadowLight;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.borderColor = '#DDE3E8';
-            e.currentTarget.style.boxShadow = 'none';
-          }}
-        >
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <div 
-                className="w-12 h-12 rounded-xl flex items-center justify-center border transition-colors shadow-2xs"
-                style={{
-                  backgroundColor: theme.bgLight,
-                  borderColor: theme.borderLight,
-                  color: companyColor,
-                }}
-              >
-                <Users className="w-6 h-6" />
+              <div className="mt-6 pt-4 border-t border-[#DDE3E8] flex items-center justify-between text-xs font-semibold">
+                {disponivel ? (
+                  <>
+                    <span style={{ color: mod.cor }}>Acessar</span>
+                    <ArrowRight
+                      className="w-4 h-4 transform group-hover:translate-x-1 transition-transform"
+                      style={{ color: mod.cor }}
+                    />
+                  </>
+                ) : (
+                  <span className="text-[#8995A1]">Módulo em desenvolvimento</span>
+                )}
               </div>
-              <span className="bg-[#E8F6F1] text-[#159A72] text-[11px] font-bold px-2.5 py-1 rounded-full border border-[#B8E8D9] uppercase tracking-wider">
-                Ativo
-              </span>
             </div>
-
-            <h2 className="text-base font-bold text-[#17212B] transition-colors">
-              EFETIVO
-            </h2>
-            <p className="text-xs text-[#687582] mt-2 leading-relaxed">
-              Quadro de colaboradores ativos, alocação em canteiros e acompanhamento por função e obra.
-            </p>
-          </div>
-
-          <div 
-            className="mt-6 pt-4 border-t border-[#DDE3E8] flex items-center justify-between text-xs font-semibold transition-colors"
-            style={{ color: companyColor }}
-          >
-            <span>Acessar Efetivo</span>
-            <ArrowRight className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" />
-          </div>
-        </div>
-
-        {/* 2. CENTRAL DE SOLICITAÇÕES */}
-        <div
-          onClick={() => onSelectModule('solicitacoes')}
-          className="group relative bg-white rounded-2xl border border-[#DDE3E8] p-6 shadow-xs hover:shadow-md transition-all cursor-pointer flex flex-col justify-between"
-          onMouseEnter={(e) => {
-            e.currentTarget.style.borderColor = companyColor;
-            e.currentTarget.style.boxShadow = theme.shadowLight;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.borderColor = '#DDE3E8';
-            e.currentTarget.style.boxShadow = 'none';
-          }}
-        >
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <div 
-                className="w-12 h-12 rounded-xl flex items-center justify-center border transition-colors shadow-2xs"
-                style={{
-                  backgroundColor: '#FEF3C7',
-                  borderColor: '#FDE68A',
-                  color: '#D97706',
-                }}
-              >
-                <Send className="w-6 h-6" />
-              </div>
-              <span className="bg-[#FEF3C7] text-[#B45309] text-[11px] font-bold px-2.5 py-1 rounded-full border border-[#FDE68A] uppercase tracking-wider">
-                Fila de Aprovação
-              </span>
-            </div>
-
-            <h2 className="text-base font-bold text-[#17212B] transition-colors">
-              SOLICITAÇÕES & APROVAÇÕES
-            </h2>
-            <p className="text-xs text-[#687582] mt-2 leading-relaxed">
-              Central de aprovação de alterações cadastrais enviadas por assistentes e cargos sem permissão de edição direta.
-            </p>
-          </div>
-
-          <div 
-            className="mt-6 pt-4 border-t border-[#DDE3E8] flex items-center justify-between text-xs font-semibold transition-colors text-[#D97706]"
-          >
-            <span>Gerenciar Solicitações</span>
-            <ArrowRight className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" />
-          </div>
-        </div>
-
-        {/* 3. PERMISSÕES POR CARGO */}
-        <div
-          onClick={() => onSelectModule('permissoes')}
-          className="group relative bg-white rounded-2xl border border-[#DDE3E8] p-6 shadow-xs hover:shadow-md transition-all cursor-pointer flex flex-col justify-between"
-          onMouseEnter={(e) => {
-            e.currentTarget.style.borderColor = companyColor;
-            e.currentTarget.style.boxShadow = theme.shadowLight;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.borderColor = '#DDE3E8';
-            e.currentTarget.style.boxShadow = 'none';
-          }}
-        >
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <div 
-                className="w-12 h-12 rounded-xl flex items-center justify-center border transition-colors shadow-2xs"
-                style={{
-                  backgroundColor: '#E8F3F6',
-                  borderColor: '#C6E3EB',
-                  color: '#176B87',
-                }}
-              >
-                <ShieldCheck className="w-6 h-6" />
-              </div>
-              <span className="bg-[#E8F3F6] text-[#176B87] text-[11px] font-bold px-2.5 py-1 rounded-full border border-[#C6E3EB] uppercase tracking-wider">
-                Governança
-              </span>
-            </div>
-
-            <h2 className="text-base font-bold text-[#17212B] transition-colors">
-              PERMISSÕES POR CARGO
-            </h2>
-            <p className="text-xs text-[#687582] mt-2 leading-relaxed">
-              Configure a matriz granular de acessos por cargo: Visualizar, Criar, Editar Direto, Excluir e Solicitar Alteração.
-            </p>
-          </div>
-
-          <div 
-            className="mt-6 pt-4 border-t border-[#DDE3E8] flex items-center justify-between text-xs font-semibold transition-colors text-[#176B87]"
-          >
-            <span>Configurar Matriz</span>
-            <ArrowRight className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" />
-          </div>
-        </div>
-
-        {/* 4. ALMOXARIFADO (Em breve) */}
-        <div className="relative bg-[#F8FAFB] rounded-2xl border border-[#DDE3E8] p-6 shadow-none opacity-70 flex flex-col justify-between cursor-not-allowed select-none">
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 rounded-xl bg-white text-[#8995A1] flex items-center justify-center border border-[#DDE3E8]">
-                <Package className="w-6 h-6" />
-              </div>
-              <span className="bg-[#F4F6F8] text-[#8995A1] text-[11px] font-bold px-2.5 py-1 rounded-full border border-[#DDE3E8] uppercase tracking-wider flex items-center space-x-1">
-                <Lock className="w-3 h-3 inline mr-0.5" /> Em breve
-              </span>
-            </div>
-
-            <h2 className="text-base font-bold text-[#687582]">
-              ALMOXARIFADO & MATERIAIS
-            </h2>
-            <p className="text-xs text-[#8995A1] mt-2 leading-relaxed">
-              Controle de estoque, fornecedores, entradas e saídas de materiais.
-            </p>
-          </div>
-
-          <div className="mt-6 pt-4 border-t border-[#DDE3E8] flex items-center justify-between text-xs font-medium text-[#8995A1]">
-            <span>Módulo em desenvolvimento</span>
-          </div>
-        </div>
-
-        {/* 5. SEGURANÇA (Em breve) */}
-        <div className="relative bg-[#F8FAFB] rounded-2xl border border-[#DDE3E8] p-6 shadow-none opacity-70 flex flex-col justify-between cursor-not-allowed select-none">
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 rounded-xl bg-white text-[#8995A1] flex items-center justify-center border border-[#DDE3E8]">
-                <ShieldAlert className="w-6 h-6" />
-              </div>
-              <span className="bg-[#F4F6F8] text-[#8995A1] text-[11px] font-bold px-2.5 py-1 rounded-full border border-[#DDE3E8] uppercase tracking-wider flex items-center space-x-1">
-                <Lock className="w-3 h-3 inline mr-0.5" /> Em breve
-              </span>
-            </div>
-
-            <h2 className="text-base font-bold text-[#687582]">
-              SEGURANÇA & EPIS
-            </h2>
-            <p className="text-xs text-[#8995A1] mt-2 leading-relaxed">
-              Gestão de EPIs, registros de treinamentos e normas de segurança do trabalho.
-            </p>
-          </div>
-
-          <div className="mt-6 pt-4 border-t border-[#DDE3E8] flex items-center justify-between text-xs font-medium text-[#8995A1]">
-            <span>Módulo em desenvolvimento</span>
-          </div>
-        </div>
-
-        {/* 6. DOCUMENTOS DOS COLABORADORES */}
-        <div
-          onClick={() => onSelectModule('documentos')}
-          className="group relative bg-white rounded-2xl border border-[#DDE3E8] p-6 shadow-xs hover:shadow-md transition-all cursor-pointer flex flex-col justify-between"
-          onMouseEnter={(e) => {
-            e.currentTarget.style.borderColor = companyColor;
-            e.currentTarget.style.boxShadow = theme.shadowLight;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.borderColor = '#DDE3E8';
-            e.currentTarget.style.boxShadow = 'none';
-          }}
-        >
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <div
-                className="w-12 h-12 rounded-xl flex items-center justify-center border transition-colors shadow-2xs"
-                style={{
-                  backgroundColor: '#EDE9FE',
-                  borderColor: '#DDD6FE',
-                  color: '#7C3AED',
-                }}
-              >
-                <FolderOpen className="w-6 h-6" />
-              </div>
-              <span className="bg-[#E8F6F1] text-[#159A72] text-[11px] font-bold px-2.5 py-1 rounded-full border border-[#B8E8D9] uppercase tracking-wider">
-                Ativo
-              </span>
-            </div>
-
-            <h2 className="text-base font-bold text-[#17212B] transition-colors">
-              DOCUMENTOS & CERTIDÕES
-            </h2>
-            <p className="text-xs text-[#687582] mt-2 leading-relaxed">
-              Repositório de documentos por colaborador: ASO, NRs, contratos e certidões, com controle de vencimento e pendências.
-            </p>
-          </div>
-
-          <div className="mt-6 pt-4 border-t border-[#DDE3E8] flex items-center justify-between text-xs font-semibold transition-colors text-[#7C3AED]">
-            <span>Acessar Documentos</span>
-            <ArrowRight className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" />
-          </div>
-        </div>
+          );
+        })}
       </div>
     </div>
   );

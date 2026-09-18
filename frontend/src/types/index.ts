@@ -71,12 +71,30 @@ export type ActiveView =
   | 'dashboard'
   | 'administrativo'
   | 'efetivo'
+  | 'efetivo-obra'
   | 'admissao'
   | 'usuarios'
   | 'permissoes'
   | 'solicitacoes'
   | 'documentos'
-  | 'colaborador-perfil';
+  | 'colaborador-perfil'
+  | 'seguranca'
+  | 'almoxarifado';
+
+/** Os 4 modulos do sistema. A lateral mostra so as telas do modulo aberto. */
+export type ChaveModulo = 'administrativo' | 'documentacoes' | 'seguranca' | 'almoxarifado';
+
+/**
+ * Usuario autenticado na sessao.
+ * `perfil` e `permissoes` vem do login e decidem o que aparece no menu.
+ */
+export interface UsuarioSessao {
+  email: string;
+  name: string;
+  role: string;
+  perfil?: PerfilUsuario | string;
+  permissoes?: string[];
+}
 
 export type AdminSubSection = 'admissao' | 'efetivo' | 'desligados' | 'ferias';
 

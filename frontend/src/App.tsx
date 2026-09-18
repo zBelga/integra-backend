@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { ActiveView, Empresa } from './types';
+import { ActiveView, Empresa, UsuarioSessao } from './types';
 import { Header } from './components/layout/Header';
 import { LeftSidebar } from './components/layout/LeftSidebar';
 import { Dashboard } from './components/dashboard/Dashboard';
@@ -14,9 +14,31 @@ import { DocumentosView } from './components/documentos/DocumentosView';
 import { Toast, ToastMessage } from './components/ui/Toast';
 import { fetchEmpresas, createEmpresa, updateEmpresa, deleteEmpresa } from './services/api';
 
+/** Placeholder para telas que ainda não existem */
+const EmBreve: React.FC<{ titulo: string; onVoltar: () => void }> = ({ titulo, onVoltar }) => (
+  <div className="flex-1 flex items-center justify-center p-6">
+    <div className="text-center max-w-md">
+      <div className="w-14 h-14 rounded-2xl bg-[#F4F6F8] border border-[#DDE3E8] flex items-center justify-center mx-auto mb-4">
+        <span className="text-2xl" aria-hidden="true">🚧</span>
+      </div>
+      <h2 className="text-lg font-bold text-[#17212B]">{titulo}</h2>
+      <p className="text-sm text-[#687582] mt-2 leading-relaxed">
+        Este módulo ainda está em desenvolvimento. Ele já aparece no menu para
+        você acompanhar a estrutura final do sistema.
+      </p>
+      <button
+        onClick={onVoltar}
+        className="mt-6 px-4 py-2 text-xs font-semibold text-white bg-[#176B87] hover:bg-[#135a73] rounded-lg transition-colors cursor-pointer"
+      >
+        Voltar aos módulos
+      </button>
+    </div>
+  </div>
+);
+
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [currentUser, setCurrentUser] = useState<{ email: string; name: string; role: string }>({
+  const [currentUser, setCurrentUser] = useState<UsuarioSessao>({
     email: 'fabriciooliveira2431@gmail.com',
     name: 'Fabrício Oliveira',
     role: 'Administrador Geral',
@@ -41,7 +63,7 @@ export default function App() {
     if (isAuthenticated) loadEmpresas();
   }, [isAuthenticated, loadEmpresas]);
 
-  const handleLoginSuccess = (credentials: { email: string; name: string; role: string }) => {
+  const handleLoginSuccess = (credentials: UsuarioSessao) => {
     setCurrentUser(credentials);
     setIsAuthenticated(true);
     setCurrentView('empresas');
@@ -194,6 +216,16 @@ export default function App() {
           )}
           {currentView === 'administrativo' && (
             <AdministrativoView onShowToast={setToast} selectedEmpresa={selectedEmpresa} />
+          )}
+          {(currentView === 'efetivo-obra' || currentView === 'seguranca' || currentView === 'almoxarifado') && (
+            <EmBreve
+              titulo={
+                currentView === 'efetivo-obra' ? 'Efetivo por Obra'
+                : currentView === 'seguranca'  ? 'Segurança & EPIs'
+                : 'Almoxarifado & Materiais'
+              }
+              onVoltar={() => setCurrentView('dashboard')}
+            />
           )}
           {currentView === 'efetivo' && (
             <div className="flex-1 overflow-y-auto p-6">
