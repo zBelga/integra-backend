@@ -37,3 +37,172 @@
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: #B4C0CB;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   TELA DE LOGIN
+   Escopo isolado em .login-integra — não afeta o resto do app.
+   Animações só com transform/opacity (compostas pela GPU).
+   ═══════════════════════════════════════════════════════════ */
+
+.login-integra {
+  /* A tela de login tem fundo próprio, independente do body claro */
+  background-color: #061421;
+}
+
+/* ── Campos ── */
+.login-integra .campo-integra {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0 0.95rem;
+  height: 3rem;
+  border-radius: 0.7rem;
+  background-color: #0C2334;
+  border: 1px solid #1B3D55;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.login-integra .campo-integra:focus-within {
+  border-color: #3BC6F0;
+  box-shadow: 0 0 0 3px rgba(59, 198, 240, 0.16);
+}
+.login-integra .campo-integra input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #F2F8FC;
+  font-size: 0.875rem;
+}
+.login-integra .campo-integra input::placeholder {
+  color: #4C7089;
+}
+.login-integra .campo-integra input:disabled {
+  opacity: 0.55;
+}
+/* Autofill do Chrome não pode voltar ao branco */
+.login-integra .campo-integra input:-webkit-autofill,
+.login-integra .campo-integra input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #F2F8FC;
+  -webkit-box-shadow: 0 0 0 1000px #0C2334 inset;
+  caret-color: #F2F8FC;
+}
+
+/* ── Checkbox ── */
+.login-integra .check-integra {
+  appearance: none;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 0.3rem;
+  border: 1px solid #2A5670;
+  background-color: #0C2334;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.login-integra .check-integra:checked {
+  background-color: #2BA6D4;
+  border-color: #2BA6D4;
+  /* check desenhado em SVG inline: sem requisição extra */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23061421' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-6'/%3E%3C/svg%3E");
+  background-size: 100%;
+}
+.login-integra .check-integra:focus-visible {
+  outline: 2px solid #3BC6F0;
+  outline-offset: 2px;
+}
+
+/* ── Botão principal ── */
+.login-integra .botao-integra {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  height: 3rem;
+  border: none;
+  border-radius: 0.7rem;
+  background: linear-gradient(135deg, #2BA6D4 0%, #1B7FA8 100%);
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  transition: transform 0.16s ease, opacity 0.16s ease;
+  will-change: transform;
+}
+.login-integra .botao-integra:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+.login-integra .botao-integra:active:not(:disabled) {
+  transform: translateY(0);
+}
+.login-integra .botao-integra:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.login-integra .botao-integra:focus-visible {
+  outline: 2px solid #7ADCFA;
+  outline-offset: 2px;
+}
+.login-integra .seta-integra {
+  transition: transform 0.16s ease;
+}
+.login-integra .botao-integra:hover:not(:disabled) .seta-integra {
+  transform: translateX(3px);
+}
+
+/* ── Alerta de erro ── */
+.login-integra .alerta-integra {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 0.6rem;
+  background-color: rgba(214, 69, 80, 0.12);
+  border: 1px solid rgba(214, 69, 80, 0.38);
+  color: #FFB3B8;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  animation: integra-alerta 0.22s ease-out;
+}
+@keyframes integra-alerta {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Spinner ── */
+.login-integra .spinner-integra {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: integra-girar 0.7s linear infinite;
+}
+@keyframes integra-girar {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Entrada do conteúdo ── */
+.login-entrada {
+  animation: integra-subir 0.4s ease-out both;
+}
+@keyframes integra-subir {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Respeita quem pediu menos movimento ── */
+@media (prefers-reduced-motion: reduce) {
+  .login-integra .alerta-integra,
+  .login-entrada {
+    animation: none;
+  }
+  .login-integra .botao-integra,
+  .login-integra .seta-integra {
+    transition: none;
+  }
+  .login-integra .botao-integra:hover:not(:disabled) {
+    transform: none;
+  }
+}
