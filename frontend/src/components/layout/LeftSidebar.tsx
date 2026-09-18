@@ -14,6 +14,8 @@ import {
   FolderOpen,
   HardHat,
   Lock,
+  Settings2,
+  ListChecks,
 } from 'lucide-react';
 import { ActiveView, ChaveModulo, Empresa, UsuarioSessao } from '../../types';
 import { getCompanyTheme } from '../../utils/theme';
@@ -39,6 +41,8 @@ interface ItemNav {
   titulo?: string;
   /** Aparece no menu mas ainda não tem tela */
   emBreve?: boolean;
+  /** Só para quem pode configurar (master, administrador, gestor de RH) */
+  somenteGestao?: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -67,6 +71,20 @@ const MODULOS: Record<ChaveModulo, { titulo: string; itens: ItemNav[] }> = {
         tambemAtivoEm: ['colaborador-perfil'],
         titulo: 'Documentos dos Colaboradores',
       },
+      {
+        view: 'documento-tipos',
+        label: 'Tipos de Documentos',
+        icon: Settings2,
+        titulo: 'Catálogo de tipos de documento da empresa',
+        somenteGestao: true,
+      },
+      {
+        view: 'documentos-funcao',
+        label: 'Documentos por Função',
+        icon: ListChecks,
+        titulo: 'Quais documentos cada função precisa entregar',
+        somenteGestao: true,
+      },
     ],
   },
   seguranca:    { titulo: 'Segurança',    itens: [] },
@@ -80,6 +98,8 @@ const MODULO_DA_VIEW: Partial<Record<ActiveView, ChaveModulo>> = {
   'efetivo-obra':       'administrativo',
   documentos:           'documentacoes',
   'colaborador-perfil': 'documentacoes',
+  'documento-tipos':    'documentacoes',
+  'documentos-funcao':  'documentacoes',
   seguranca:            'seguranca',
   almoxarifado:         'almoxarifado',
 };
@@ -101,6 +121,14 @@ export function ehMaster(u?: UsuarioSessao): boolean {
  * Solicitações é liberado por permissão de cargo — encarregados enxergam,
  * os demais não. O master vê sempre.
  */
+/** Quem configura o catálogo de documentos e as exigências por função. */
+const PERFIS_GESTAO = ['master_admin', 'administrador', 'gestor_rh'];
+export function podeConfigurarDocumentos(u?: UsuarioSessao): boolean {
+  if (!u) return false;
+  if (ehMaster(u)) return true;
+  return PERFIS_GESTAO.includes(String(u.perfil || ''));
+}
+
 export function podeVerSolicitacoes(u?: UsuarioSessao): boolean {
   if (!u) return false;
   if (ehMaster(u)) return true;
@@ -123,6 +151,10 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
 
   const moduloAberto = MODULO_DA_VIEW[currentView];
   const modulo = moduloAberto ? MODULOS[moduloAberto] : null;
+  // Telas de configuração só aparecem para quem pode configurar
+  const itensDoModulo = (modulo?.itens || []).filter(
+    item => !item.somenteGestao || podeConfigurarDocumentos(currentUser)
+  );
 
   const master = ehMaster(currentUser);
   const verSolicitacoes = podeVerSolicitacoes(currentUser);
@@ -258,15 +290,15 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
           </div>
 
           {/* Telas do módulo aberto — some quando está no dashboard */}
-          {modulo && modulo.itens.length > 0 && (
+          {modulo && itensDoModulo.length > 0 && (
             <div className="space-y-1 pt-1 border-t border-[#F0F3F5]">
               <TituloSecao texto={modulo.titulo} />
-              {modulo.itens.map(item => <BotaoNav key={item.view} item={item} />)}
+              {itensDoModulo.map(item => <BotaoNav key={item.view} item={item} />)}
             </div>
           )}
 
           {/* Módulo aberto ainda sem telas */}
-          {modulo && modulo.itens.length === 0 && !isCollapsed && (
+          {modulo && itensDoModulo.length === 0 && !isCollapsed && (
             <div className="pt-1 border-t border-[#F0F3F5]">
               <TituloSecao texto={modulo.titulo} />
               <p className="px-3 text-[11px] text-[#8995A1] leading-relaxed">

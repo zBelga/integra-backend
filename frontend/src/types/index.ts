@@ -77,6 +77,8 @@ export type ActiveView =
   | 'permissoes'
   | 'solicitacoes'
   | 'documentos'
+  | 'documento-tipos'
+  | 'documentos-funcao'
   | 'colaborador-perfil'
   | 'seguranca'
   | 'almoxarifado';
@@ -248,6 +250,78 @@ export interface Colaborador {
   data_aso?: string;
   created_at?: string;
   updated_at?: string;
+}
+
+// ─── Gestão de documentos ────────────────────────────────────────────────────
+
+/** Um tipo de documento do catálogo da empresa (RG, ASO, NR 35, PEMT...) */
+export interface DocumentoTipo {
+  id: string;
+  empresa_id: string;
+  nome: string;
+  codigo: string;
+  descricao: string;
+  tem_validade: boolean;
+  validade_meses?: number | null;
+  dias_alerta: number;
+  status: 'ativo' | 'inativo';
+  padrao: boolean;
+  ordem: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface DocumentoTipoFormData {
+  nome: string;
+  codigo: string;
+  descricao: string;
+  tem_validade: boolean;
+  validade_meses?: number | null;
+  dias_alerta: number;
+  status: 'ativo' | 'inativo';
+}
+
+/** Situação de um item do checklist do colaborador */
+export type SituacaoDocumento = 'pendente' | 'valido' | 'a_vencer' | 'vencido' | 'sem_validade';
+
+export interface ChecklistItem {
+  tipo_id: string;
+  codigo: string;
+  nome: string;
+  descricao: string;
+  tem_validade: boolean;
+  validade_meses?: number | null;
+  dias_alerta: number;
+  situacao: SituacaoDocumento;
+  documento_id: string | null;
+  data_vencimento: string;
+  data_emissao: string;
+}
+
+export interface IndicadoresDocumentos {
+  total: number;
+  vencidos: number;
+  a_vencer: number;
+  pendentes: number;
+  obrigatorios: number;
+  validos: number;
+  /** null = a empresa ainda não configurou exigências para esta função */
+  conformidade: number | null;
+}
+
+export interface ChecklistColaborador {
+  colaborador: Colaborador;
+  checklist: ChecklistItem[];
+  anexados: Documento[];
+  catalogo: Array<Pick<DocumentoTipo, 'id' | 'codigo' | 'nome' | 'descricao' | 'tem_validade' | 'validade_meses' | 'dias_alerta'>>;
+  indicadores: IndicadoresDocumentos;
+}
+
+/** Uma função/cargo existente no sistema, para a matriz de exigências */
+export interface FuncaoEmpresa {
+  chave: string;
+  nome: string;
+  colaboradores: number;
 }
 
 export interface Documento {

@@ -1,17 +1,26 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Upload, FileText, AlertCircle, Check, Sparkles } from 'lucide-react';
 import { uploadDocumento } from '../../services/api';
-import {
-  TIPOS_DOCUMENTO,
-  CATEGORIAS,
-  getTipoConfig,
-  addMeses,
-} from '../../constants/documentosConfig';
+import { addMeses } from '../../constants/documentosUI';
+
+/** Um tipo do catálogo da empresa (vem do banco, não de uma lista fixa). */
+export interface TipoCatalogo {
+  id: string;
+  codigo: string;
+  nome: string;
+  descricao?: string;
+  tem_validade: boolean;
+  validade_meses?: number | null;
+  dias_alerta?: number;
+}
 
 interface UploadDocumentoModalProps {
   colaboradorId: string;
   empresaId: string;
-  tipoPreSelecionado?: string;
+  /** Catálogo ativo da empresa */
+  catalogo: TipoCatalogo[];
+  /** Quando vem do checklist, já chega com o tipo escolhido */
+  tipoPreSelecionado?: { id: string; codigo: string; nome: string };
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -21,11 +30,12 @@ const MAX_MB = 10;
 export const UploadDocumentoModal: React.FC<UploadDocumentoModalProps> = ({
   colaboradorId,
   empresaId,
+  catalogo,
   tipoPreSelecionado,
   onClose,
   onSuccess,
 }) => {
-  const [tipo, setTipo] = useState(tipoPreSelecionado || '');
+  const [tipoId, setTipoId] = useState(tipoPreSelecionado?.id || '');
   const [nome, setNome] = useState('');
   const [dataEmissao, setDataEmissao] = useState('');
   const [dataVencimento, setDataVencimento] = useState('');
@@ -37,22 +47,21 @@ export const UploadDocumentoModal: React.FC<UploadDocumentoModalProps> = ({
   const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const tipoCfg = getTipoConfig(tipo);
+  const tipoCfg = catalogo.find(t => t.id === tipoId);
 
-  // Pré-preenche o nome ao escolher o tipo
+  // Pré-preenche o nome quando o tipo já vem escolhido pelo checklist
   useEffect(() => {
-    if (tipoPreSelecionado) {
-      const cfg = getTipoConfig(tipoPreSelecionado);
-      if (cfg && !nome) setNome(cfg.nome);
-    }
+    if (tipoPreSelecionado && !nome) setNome(tipoPreSelecionado.nome);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tipoPreSelecionado]);
 
-  // Calcula vencimento automático ao informar a emissão
+  // Sugere o vencimento a partir da emissão + validade do tipo
   useEffect(() => {
-    if (dataEmissao && tipoCfg?.temVencimento && tipoCfg.validadeMeses && !dataVencimento) {
-      setDataVencimento(addMeses(dataEmissao, tipoCfg.validadeMeses));
+    if (dataEmissao && tipoCfg?.tem_validade && tipoCfg.validade_meses && !dataVencimento) {
+      setDataVencimento(addMeses(dataEmissao, tipoCfg.validade_meses));
     }
-  }, [dataEmissao, tipo]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataEmissao, tipoId]);
 
   const validarArquivo = (file: File): boolean => {
     if (file.size > MAX_MB * 1024 * 1024) {
@@ -89,21 +98,19 @@ export const UploadDocumentoModal: React.FC<UploadDocumentoModalProps> = ({
     if (file) aplicarArquivo(file);
   };
 
-  const handleTipoChange = (novoTipo: string) => {
-    setTipo(novoTipo);
-    const cfg = getTipoConfig(novoTipo);
-    // Se o nome ainda não foi editado manualmente, sugere o nome do tipo
-    if (cfg && (!nome || TIPOS_DOCUMENTO.some(t => t.nome === nome))) {
-      setNome(cfg.nome);
-    }
-    // Limpa vencimento se o novo tipo não tem validade
-    if (cfg && !cfg.temVencimento) setDataVencimento('');
+  const handleTipoChange = (novoTipoId: string) => {
+    setTipoId(novoTipoId);
+    const cfg = catalogo.find(t => t.id === novoTipoId);
+    // Se o nome ainda não foi digitado à mão, sugere o nome do tipo
+    if (cfg && (!nome || catalogo.some(t => t.nome === nome))) setNome(cfg.nome);
+    // Tipo sem validade não guarda vencimento
+    if (cfg && !cfg.tem_validade) setDataVencimento('');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedFile) { setError('Selecione um arquivo.'); return; }
-    if (!tipo) { setError('Selecione o tipo do documento.'); return; }
+    if (!tipoCfg) { setError('Selecione o tipo do documento.'); return; }
     if (!nome.trim()) { setError('Informe um nome para o documento.'); return; }
     if (dataEmissao && dataVencimento && dataVencimento < dataEmissao) {
       setError('A data de vencimento não pode ser anterior à emissão.');
@@ -130,7 +137,8 @@ export const UploadDocumentoModal: React.FC<UploadDocumentoModalProps> = ({
       await uploadDocumento({
         colaborador_id: colaboradorId,
         empresa_id: empresaId,
-        tipo,
+        tipo: tipoCfg.codigo,
+        tipo_id: tipoCfg.id,
         nome: nome.trim(),
         nome_arquivo: selectedFile.name,
         fileBase64,
@@ -150,9 +158,6 @@ export const UploadDocumentoModal: React.FC<UploadDocumentoModalProps> = ({
       setIsLoading(false);
     }
   };
-
-  // Agrupa tipos por categoria para o select
-  const categoriasOrdenadas = (Object.keys(CATEGORIAS) as Array<keyof typeof CATEGORIAS>);
 
   return (
     <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -225,34 +230,22 @@ export const UploadDocumentoModal: React.FC<UploadDocumentoModalProps> = ({
           <div className="grid grid-cols-2 gap-3">
             {/* Tipo — agrupado por categoria */}
             <div className="col-span-2">
-              <label className="block text-xs font-semibold text-[#17212B] mb-1">
-                Tipo de Documento *
-                {tipoCfg?.obrigatorio && (
-                  <span className="ml-1.5 px-1.5 py-0.5 bg-[#EDE9FE] text-[#7C3AED] border border-[#DDD6FE] rounded text-[9px] font-bold">
-                    OBRIGATÓRIO
-                  </span>
-                )}
-              </label>
+              <label className="block text-xs font-semibold text-[#17212B] mb-1">Tipo de Documento *</label>
               <select
-                value={tipo}
+                value={tipoId}
                 onChange={e => handleTipoChange(e.target.value)}
                 className="w-full px-3 py-2 text-xs border border-[#DDE3E8] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#176B87] bg-white"
               >
                 <option value="">Selecione o tipo...</option>
-                {categoriasOrdenadas.map(cat => {
-                  const tipos = TIPOS_DOCUMENTO.filter(t => t.categoria === cat);
-                  if (tipos.length === 0) return null;
-                  return (
-                    <optgroup key={cat} label={CATEGORIAS[cat].label}>
-                      {tipos.map(t => (
-                        <option key={t.codigo} value={t.codigo}>
-                          {t.nome}{t.obrigatorio ? ' *' : ''}
-                        </option>
-                      ))}
-                    </optgroup>
-                  );
-                })}
+                {catalogo.map(t => (
+                  <option key={t.id} value={t.id}>
+                    {t.nome} ({t.codigo})
+                  </option>
+                ))}
               </select>
+              {tipoCfg?.descricao && (
+                <p className="mt-1 text-[10px] text-[#687582] leading-snug">{tipoCfg.descricao}</p>
+              )}
             </div>
 
             {/* Nome */}
@@ -280,17 +273,17 @@ export const UploadDocumentoModal: React.FC<UploadDocumentoModalProps> = ({
             <div>
               <label className="block text-xs font-semibold text-[#17212B] mb-1">
                 Vencimento
-                {tipoCfg?.validadeMeses && (
+                {tipoCfg?.validade_meses ? (
                   <span className="ml-1 text-[9px] text-[#159A72] font-bold inline-flex items-center gap-0.5">
-                    <Sparkles className="w-2.5 h-2.5" />{tipoCfg.validadeMeses}m
+                    <Sparkles className="w-2.5 h-2.5" />{tipoCfg.validade_meses}m
                   </span>
-                )}
+                ) : null}
               </label>
               <input
                 type="date"
                 value={dataVencimento}
                 onChange={e => setDataVencimento(e.target.value)}
-                disabled={tipoCfg ? !tipoCfg.temVencimento : false}
+                disabled={tipoCfg ? !tipoCfg.tem_validade : false}
                 className="w-full px-3 py-2 text-xs border border-[#DDE3E8] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#176B87] disabled:bg-[#F4F6F8] disabled:text-[#8995A1]"
               />
             </div>
@@ -308,12 +301,12 @@ export const UploadDocumentoModal: React.FC<UploadDocumentoModalProps> = ({
             </div>
           </div>
 
-          {tipoCfg?.validadeMeses && dataEmissao && dataVencimento && (
+          {tipoCfg?.validade_meses && dataEmissao && dataVencimento ? (
             <p className="text-[10px] text-[#159A72] flex items-center gap-1">
               <Sparkles className="w-3 h-3" />
-              Vencimento calculado automaticamente ({tipoCfg.validadeMeses} meses após a emissão) — pode ser ajustado.
+              Vencimento sugerido ({tipoCfg.validade_meses} meses após a emissão) — pode ser ajustado.
             </p>
-          )}
+          ) : null}
 
           {error && (
             <div className="flex items-center gap-2 bg-[#FDEBEC] border border-[#F5B8BB] rounded-lg px-3 py-2">

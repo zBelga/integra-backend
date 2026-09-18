@@ -56,9 +56,9 @@ export const Header: React.FC<HeaderProps> = ({
           )
         )}
 
-        <div className="w-full px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        <div className="w-full px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2 min-w-0">
           {/* Left: Mobile hamburger & Brand */}
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-3 min-w-0">
             {showMobileToggle && onToggleMobileMenu && currentView !== 'usuarios' && (
               <button
                 onClick={onToggleMobileMenu}
@@ -129,7 +129,7 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           {/* Center/Right: Empresa Selector Chip & User Profile */}
-          <div className="flex items-center space-x-3 sm:space-x-4">
+          <div className="flex items-center space-x-3 sm:space-x-4 shrink-0">
             {/* In usuarios view: Direct button to Go to Enterprises */}
             {currentView === 'usuarios' && (
               <button

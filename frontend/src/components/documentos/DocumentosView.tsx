@@ -15,14 +15,15 @@ import {
   X,
 } from 'lucide-react';
 import { ColaboradorPerfil } from './ColaboradorPerfil';
-import { fetchColaboradores, fetchResumoDocumentos, DocumentoResumo } from '../../services/api';
-import { Colaborador } from '../../types';
 import {
-  DOCS_OBRIGATORIOS,
-  getStatusVencimento,
-  diasParaVencer,
-  getTipoConfig,
-} from '../../constants/documentosConfig';
+  fetchColaboradores,
+  fetchResumoDocumentos,
+  fetchDocumentoTipos,
+  fetchExigenciasResumo,
+  DocumentoResumo,
+} from '../../services/api';
+import { Colaborador, DocumentoTipo } from '../../types';
+import { situacaoDoDocumento, diasParaVencer } from '../../constants/documentosUI';
 import { formatDateBR } from '../../utils/cpfMask';
 
 interface ColaboradorComDocs {
@@ -48,15 +49,18 @@ const FILTROS: { key: FiltroStatus; label: string }[] = [
 
 interface DocumentosViewProps {
   selectedEmpresaId?: string;
+  /** Abre Configurações → Documentos por Função */
+  onConfigurarExigencias?: () => void;
 }
 
-export const DocumentosView: React.FC<DocumentosViewProps> = ({ selectedEmpresaId }) => {
+export const DocumentosView: React.FC<DocumentosViewProps> = ({ selectedEmpresaId, onConfigurarExigencias }) => {
   const [lista, setLista] = useState<ColaboradorComDocs[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filtro, setFiltro] = useState<FiltroStatus>('todos');
   const [selectedColaborador, setSelectedColaborador] = useState<Colaborador | null>(null);
   const [showAlertas, setShowAlertas] = useState(true);
+  const [tiposAtivos, setTiposAtivos] = useState<DocumentoTipo[]>([]);
 
   const loadDados = useCallback(async () => {
     setIsLoading(true);
@@ -68,13 +72,26 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({ selectedEmpresaI
 
       // Uma única requisição traz o resumo de todos (antes era uma por pessoa)
       let resumo: Record<string, { total: number; tipos: string[]; docs: DocumentoResumo[] }> = {};
+      let tipos: DocumentoTipo[] = [];
+      let exigencias: Record<string, string[]> = {};
       try {
-        const r = await fetchResumoDocumentos();
+        // 3 requisições no total, independente do tamanho do efetivo
+        const [r, t, e] = await Promise.all([
+          fetchResumoDocumentos(),
+          fetchDocumentoTipos('ativo'),
+          fetchExigenciasResumo(),
+        ]);
         resumo = r.data || {};
+        tipos = t.data || [];
+        exigencias = e.data || {};
       } catch (e) {
         // Sem o resumo a lista ainda aparece, só sem as contagens
         console.warn('Não foi possível carregar o resumo de documentos:', e);
       }
+      setTiposAtivos(tipos);
+
+      const tipoPorId = new Map(tipos.map(t => [t.id, t]));
+      const normalizar = (v?: string) => String(v || '').trim().toUpperCase();
 
       const lista: ColaboradorComDocs[] = colaboradores.map((col) => {
         const r = resumo[col.id];
@@ -86,11 +103,15 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({ selectedEmpresaI
           colaborador: col,
           documentos: docs,
           totalDocs: r?.total || 0,
-          vencidos: vencimentos.filter(v => getStatusVencimento(v) === 'vencido').length,
-          aVencer: vencimentos.filter(v => getStatusVencimento(v) === 'a_vencer').length,
-          pendentes: DOCS_OBRIGATORIOS
-            .filter(ob => !tiposPresentes.has(ob.codigo) && !tiposPresentes.has(ob.nome))
-            .map(ob => ob.codigo),
+          vencidos: vencimentos.filter(v => situacaoDoDocumento(v) === 'vencido').length,
+          aVencer: vencimentos.filter(v => situacaoDoDocumento(v) === 'a_vencer').length,
+          // Pendências saem da regra da FUNÇÃO do colaborador, não de uma lista fixa.
+          // Tipo desativado não entra (só os ativos vêm em `tipos`).
+          pendentes: (exigencias[normalizar(col.funcao)] || [])
+            .map(id => tipoPorId.get(id))
+            .filter((t): t is DocumentoTipo => !!t)
+            .filter(t => !tiposPresentes.has(t.codigo) && !tiposPresentes.has(t.nome))
+            .map(t => t.codigo),
           carregando: false,
         };
       });
@@ -121,7 +142,7 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({ selectedEmpresaI
     const items: { colaborador: Colaborador; doc: DocumentoResumo; dias: number }[] = [];
     lista.forEach(item => {
       item.documentos.forEach(doc => {
-        const st = getStatusVencimento(doc.data_vencimento);
+        const st = situacaoDoDocumento(doc.data_vencimento);
         if (st === 'vencido' || st === 'a_vencer') {
           const dias = diasParaVencer(doc.data_vencimento);
           if (dias !== null) items.push({ colaborador: item.colaborador, doc, dias });
@@ -164,7 +185,7 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({ selectedEmpresaI
           : item.pendentes.length > 0 ? 'PENDENTE'
           : item.aVencer > 0 ? 'ATENÇÃO'
           : item.totalDocs > 0 ? 'REGULAR' : 'SEM DOCUMENTOS';
-        const pend = item.pendentes.map(p => getTipoConfig(p)?.codigo || p).join(', ');
+        const pend = item.pendentes.join(', ');
         return [
           c.numero_chapa || '', c.nome, c.funcao || '', c.obra_nome || '',
           item.totalDocs, item.vencidos, item.aVencer, pend || 'Nenhuma', status,
@@ -187,6 +208,7 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({ selectedEmpresaI
       <ColaboradorPerfil
         colaborador={selectedColaborador}
         onBack={() => { setSelectedColaborador(null); loadDados(); }}
+        onConfigurarExigencias={onConfigurarExigencias}
       />
     );
   }
@@ -507,7 +529,7 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({ selectedEmpresaI
             Exibindo {filtrados.length} de {lista.length} colaborador{lista.length !== 1 ? 'es' : ''}
           </span>
           <span>
-            {DOCS_OBRIGATORIOS.length} tipos de documento marcados como obrigatórios
+            {tiposAtivos.length} tipos ativos no catálogo · obrigatoriedade definida por função
           </span>
         </div>
       )}

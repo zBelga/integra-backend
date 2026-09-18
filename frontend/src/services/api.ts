@@ -654,6 +654,8 @@ export async function updateColaborador(
 // ─── Documentos ──────────────────────────────────────────────────────────────
 
 export interface UploadDocumentoPayload {
+  /** Vínculo estável com o catálogo da empresa */
+  tipo_id?: string;
   colaborador_id: string;
   empresa_id: string;
   tipo: string;
@@ -723,5 +725,104 @@ export async function deleteDocumento(id: string): Promise<{ success: boolean }>
   const res = await apiFetch(`/api/documentos/${id}`, { method: 'DELETE' });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || 'Erro ao excluir documento');
+  return json;
+}
+
+// ─── Catálogo de tipos de documento e regras por função ──────────────────────
+
+import type {
+  DocumentoTipo,
+  DocumentoTipoFormData,
+  ChecklistColaborador,
+  FuncaoEmpresa,
+} from '../types';
+
+/** Checklist + anexados + indicadores do colaborador, numa requisição só. */
+export async function fetchChecklistColaborador(
+  colaboradorId: string
+): Promise<{ success: boolean; data: ChecklistColaborador }> {
+  const res = await apiFetch(`/api/documentos/checklist/${colaboradorId}`);
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Erro ao carregar documentos do colaborador');
+  return json;
+}
+
+export async function fetchDocumentoTipos(
+  status: 'ativo' | 'inativo' | 'all' = 'all'
+): Promise<{ success: boolean; data: DocumentoTipo[] }> {
+  const res = await apiFetch(`/api/documento-tipos?status=${status}`);
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Erro ao carregar tipos de documento');
+  return json;
+}
+
+export async function createDocumentoTipo(
+  payload: DocumentoTipoFormData
+): Promise<{ success: boolean; data: DocumentoTipo }> {
+  const res = await apiFetch('/api/documento-tipos', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Erro ao criar tipo de documento');
+  return json;
+}
+
+export async function updateDocumentoTipo(
+  id: string,
+  payload: Partial<DocumentoTipoFormData>
+): Promise<{ success: boolean; data: DocumentoTipo }> {
+  const res = await apiFetch(`/api/documento-tipos/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Erro ao editar tipo de documento');
+  return json;
+}
+
+/** Ativa/desativa. Desativar NUNCA apaga arquivos — devolve quantos foram preservados. */
+export async function toggleDocumentoTipoStatus(
+  id: string,
+  status: 'ativo' | 'inativo'
+): Promise<{ success: boolean; data: DocumentoTipo; arquivos_preservados: number }> {
+  const res = await apiFetch(`/api/documento-tipos/${id}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Erro ao alterar status do tipo');
+  return json;
+}
+
+export async function fetchFuncoesEmpresa(): Promise<{ success: boolean; data: FuncaoEmpresa[] }> {
+  const res = await apiFetch('/api/documento-tipos/meta/funcoes');
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Erro ao carregar funções');
+  return json;
+}
+
+/** Mapa { FUNCAO: [tipo_id, ...] } com as exigências de todas as funções. */
+export async function fetchExigenciasResumo(): Promise<{
+  success: boolean;
+  data: Record<string, string[]>;
+}> {
+  const res = await apiFetch('/api/documento-tipos/exigencias/resumo');
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Erro ao carregar exigências');
+  return json;
+}
+
+/** Grava a lista de obrigatórios de uma função. Mexe só na regra. */
+export async function salvarExigenciasFuncao(
+  funcao: string,
+  tipo_ids: string[]
+): Promise<{ success: boolean; data: { funcao: string; total: number } }> {
+  const res = await apiFetch('/api/documento-tipos/exigencias', {
+    method: 'PUT',
+    body: JSON.stringify({ funcao, tipo_ids }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Erro ao salvar exigências');
   return json;
 }

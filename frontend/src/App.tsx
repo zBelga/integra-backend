@@ -11,6 +11,8 @@ import { PermissoesConfigView } from './components/permissoes/PermissoesConfigVi
 import { SolicitacoesView } from './components/solicitacoes/SolicitacoesView';
 import { LoginView } from './components/auth/LoginView';
 import { DocumentosView } from './components/documentos/DocumentosView';
+import { TiposDocumentoView } from './components/documentos/TiposDocumentoView';
+import { DocumentosPorFuncaoView } from './components/documentos/DocumentosPorFuncaoView';
 import { Toast, ToastMessage } from './components/ui/Toast';
 import { fetchEmpresas, createEmpresa, updateEmpresa, deleteEmpresa } from './services/api';
 
@@ -176,7 +178,7 @@ export default function App() {
       )}
 
       <div
-        className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ${
+        className={`flex-1 min-w-0 flex flex-col min-h-screen transition-all duration-300 ${
           isSidebarVisible
             ? isSidebarCollapsed
               ? 'lg:ml-20'
@@ -237,8 +239,13 @@ export default function App() {
             </div>
           )}
           {currentView === 'documentos' && (
-            <DocumentosView selectedEmpresaId={selectedEmpresa?.id} />
+            <DocumentosView
+              selectedEmpresaId={selectedEmpresa?.id}
+              onConfigurarExigencias={() => setCurrentView('documentos-funcao')}
+            />
           )}
+          {currentView === 'documento-tipos' && <TiposDocumentoView />}
+          {currentView === 'documentos-funcao' && <DocumentosPorFuncaoView />}
           {currentView === 'solicitacoes' && (
             <SolicitacoesView selectedEmpresa={selectedEmpresa} onShowToast={setToast} onNavigate={setCurrentView} />
           )}

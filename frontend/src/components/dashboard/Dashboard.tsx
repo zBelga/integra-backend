@@ -40,10 +40,10 @@ const MODULOS: ModuloCard[] = [
     chave: 'documentacoes',
     view: 'documentos',
     titulo: 'DOCUMENTAÇÕES',
-    descricao: 'Documentos por colaborador, controle de vencimentos e pendências obrigatórias.',
+    descricao: 'Documentos por colaborador, vencimentos e exigências por função.',
     icon: FolderOpen,
     cor: '#7C3AED', bg: '#EDE9FE', borda: '#DDD6FE',
-    telas: ['Documentos'],
+    telas: ['Documentos', 'Tipos de Documentos', 'Documentos por Função'],
   },
   {
     chave: 'seguranca',
@@ -141,27 +141,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
           )}
         </div>
       )}
-
-      {/* Title section */}
-      <div className="border-b border-[#DDE3E8] pb-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-[#17212B] tracking-tight">PAINEL ÍNTEGRA</h1>
-          <p className="text-sm text-[#687582] mt-1">
-            Selecione um dos módulos corporativos para acessar o painel de controle operacional da empresa.
-          </p>
-        </div>
-        <div 
-          className="px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-2 w-fit border"
-          style={{
-            backgroundColor: theme.bgLight,
-            borderColor: theme.borderLight,
-            color: companyColor,
-          }}
-        >
-          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: companyColor }}></span>
-          <span>ÍNTEGRA ATIVO v1.0.0</span>
-        </div>
-      </div>
 
       {/* Master Admin Section (Only for fabriciooliveira2431@gmail.com) */}
       {isMasterAdmin && (
