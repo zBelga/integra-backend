@@ -252,7 +252,7 @@ export async function importarDoSqlite(
       throw new Error(`Colunas de ${tabela} sem correspondente no Supabase: ${faltando.join(', ')}`);
     }
 
-    comandos.push(`DELETE FROM ${tabela}`);
+    comandos.push(`DELETE FROM ${tabela} WHERE true`);
     if (!linhas.length) continue;
 
     const nomes = colunas.map(c => (CAMEL.has(c.toLowerCase()) ? `"${c}"` : c)).join(', ');
