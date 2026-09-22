@@ -35,10 +35,15 @@ import {
   Settings2,
   LayoutGrid,
   List,
+  RefreshCw,
+  Layers,
+  ChevronLeft,
 } from 'lucide-react';
 import { UploadDocumentoModal } from './UploadDocumentoModal';
+import { AnexarLoteModal } from './AnexarLoteModal';
+import { HistoricoDocumentosPanel } from './HistoricoDocumentosPanel';
 import { fetchChecklistColaborador, downloadDocumento, deleteDocumento } from '../../services/api';
-import type { Colaborador, Documento, ChecklistColaborador, ChecklistItem, SituacaoDocumento } from '../../types';
+import type { Colaborador, Documento, ChecklistColaborador, ChecklistItem, SituacaoDocumento, PermissoesDocumentos } from '../../types';
 import {
   iconeDoTipo,
   ESTILO_SITUACAO,
@@ -174,12 +179,20 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
   const [ocupadoId, setOcupadoId] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ url: string; nome: string } | null>(null);
 
+  const [substituindo, setSubstituindo] = useState<{ id: string; nome: string } | undefined>();
+  const [showLote, setShowLote] = useState(false);
+  const [excluindo, setExcluindo] = useState<Documento | null>(null);
+  const [pagina, setPagina] = useState(1);
+  /** Sobe a cada mudança; o painel de histórico usa para se atualizar */
+  const [versao, setVersao] = useState(0);
+
   const carregar = useCallback(async () => {
     setIsLoading(true);
     setError('');
     try {
       const res = await fetchChecklistColaborador(colaborador.id);
       setDados(res.data);
+      setVersao(v => v + 1);
     } catch (err: any) {
       setError(err.message || 'Erro ao carregar os documentos.');
     } finally {
@@ -194,6 +207,8 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
   const anexados = dados?.anexados || [];
   const catalogo = dados?.catalogo || [];
   const semExigencias = !isLoading && checklist.length === 0;
+  // Enquanto não carrega, esconde ações de escrita (o servidor valida de novo)
+  const perm: PermissoesDocumentos = dados?.permissoes || { visualizar: true, criar: false, editar: false, excluir: false };
 
   /** Alerta do tipo, por id — usado para calcular o status de cada anexo. */
   const alertaPorTipo = useMemo(() => {
@@ -226,6 +241,17 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
     });
   }, [anexados, busca, filtroTipo, filtroStatus, statusDoAnexo]);
 
+  // Paginação no cliente: a lista já é só metadado, então não há custo de rede
+  const POR_PAGINA = 12;
+  const totalPaginas = Math.max(1, Math.ceil(anexadosFiltrados.length / POR_PAGINA));
+  const paginaAtual = Math.min(pagina, totalPaginas);
+  const anexadosPagina = useMemo(
+    () => anexadosFiltrados.slice((paginaAtual - 1) * POR_PAGINA, paginaAtual * POR_PAGINA),
+    [anexadosFiltrados, paginaAtual]
+  );
+  // Mudou filtro/busca → volta para a primeira página
+  useEffect(() => { setPagina(1); }, [busca, filtroTipo, filtroStatus]);
+
   const tiposPresentes = useMemo(
     () => Array.from(new Set(anexados.map(d => d.tipo))).sort(),
     [anexados]
@@ -241,8 +267,21 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
   // ─── Ações ───
   const abrirUpload = (item?: ChecklistItem) => {
     setUploadTipo(item ? { id: item.tipo_id, codigo: item.codigo, nome: item.nome } : undefined);
+    // Item do checklist que já tem documento → é substituição
+    const atual = item?.documento_id ? anexados.find(d => d.id === item.documento_id) : undefined;
+    setSubstituindo(atual ? { id: atual.id, nome: atual.nome } : undefined);
     setShowUpload(true);
   };
+
+  const abrirSubstituir = (doc: Documento) => {
+    const tipo = catalogo.find(t => t.id === doc.tipo_id) || catalogo.find(t => t.codigo === doc.tipo);
+    setUploadTipo(tipo ? { id: tipo.id, codigo: tipo.codigo, nome: tipo.nome } : undefined);
+    setSubstituindo({ id: doc.id, nome: doc.nome });
+    setShowUpload(true);
+  };
+
+  /** Pode clicar no card do checklist? Anexar exige "criar"; substituir exige "editar". */
+  const podeAgirNoItem = (item: ChecklistItem) => (item.documento_id ? perm.editar : perm.criar);
 
   const comArquivo = async (doc: Documento, acao: 'ver' | 'baixar') => {
     setOcupadoId(doc.id);
@@ -264,11 +303,11 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
     }
   };
 
-  const excluir = async (doc: Documento) => {
-    if (!confirm(`Excluir "${doc.nome}"?\n\nO arquivo será removido definitivamente.`)) return;
+  const confirmarExclusao = async (doc: Documento, motivo: string) => {
     setOcupadoId(doc.id);
     try {
-      await deleteDocumento(doc.id);
+      await deleteDocumento(doc.id, motivo);
+      setExcluindo(null);
       await carregar();
     } catch (err: any) {
       setError(`Erro ao excluir: ${err.message}`);
@@ -434,12 +473,22 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
                   {verTodosObrigatorios ? 'Mostrar menos' : 'Ver lista completa'}
                 </button>
               )}
-              <button
-                onClick={() => abrirUpload()}
-                className="flex items-center gap-1.5 px-3.5 py-2 bg-[#7C3AED] hover:bg-[#6D28D9] text-white text-xs font-semibold rounded-xl transition-colors cursor-pointer"
-              >
-                <Upload className="w-3.5 h-3.5" /> Anexar documento
-              </button>
+              {perm.criar && (
+                <>
+                  <button
+                    onClick={() => setShowLote(true)}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-white border border-[#DDE3E8] hover:border-[#7C3AED] text-[#17212B] text-xs font-semibold rounded-xl transition-colors cursor-pointer"
+                  >
+                    <Layers className="w-3.5 h-3.5" /> Anexar em lote
+                  </button>
+                  <button
+                    onClick={() => abrirUpload()}
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-[#7C3AED] hover:bg-[#6D28D9] text-white text-xs font-semibold rounded-xl transition-colors cursor-pointer"
+                  >
+                    <Upload className="w-3.5 h-3.5" /> Anexar documento
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
@@ -452,12 +501,16 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
                   const Icone = iconeDoTipo(item.codigo);
                   const e = ESTILO_SITUACAO[item.situacao];
                   const dias = diasParaVencer(item.data_vencimento);
+                  const liberado = podeAgirNoItem(item);
                   return (
                     <button
                       key={item.tipo_id}
-                      onClick={() => abrirUpload(item)}
-                      title={item.descricao || item.nome}
-                      className="doc-card group bg-white rounded-xl border border-[#E4E9ED] hover:border-[#7C3AED] p-3 flex flex-col items-center text-center gap-2 cursor-pointer"
+                      onClick={() => liberado && abrirUpload(item)}
+                      disabled={!liberado}
+                      title={liberado ? item.descricao || item.nome : 'Sem permissão para esta ação'}
+                      className={`doc-card group bg-white rounded-xl border border-[#E4E9ED] p-3 flex flex-col items-center text-center gap-2 ${
+                        liberado ? 'hover:border-[#7C3AED] cursor-pointer' : 'cursor-default'
+                      }`}
                     >
                       <Icone className="w-6 h-6 text-[#7C3AED]" strokeWidth={1.6} />
                       <span className="text-[11px] font-bold text-[#17212B] leading-tight line-clamp-2 uppercase">
@@ -470,9 +523,16 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
                         {e.rotulo}
                         {item.situacao === 'a_vencer' && dias != null ? ` ${dias}d` : ''}
                       </span>
-                      <span className="mt-auto flex items-center justify-center gap-1 w-full py-1.5 border border-[#DDE3E8] group-hover:border-[#7C3AED] group-hover:bg-[#F7F4FE] rounded-lg text-[11px] font-semibold text-[#17212B] transition-colors">
-                        {item.documento_id ? <><Eye className="w-3 h-3" />Substituir</> : <><Upload className="w-3 h-3" />Anexar</>}
-                      </span>
+                      {item.situacao === 'a_vencer' || item.situacao === 'vencido' || item.situacao === 'valido' ? (
+                        item.data_vencimento ? (
+                          <span className="text-[10px] text-[#687582]">Vence {formatDateBR(item.data_vencimento)}</span>
+                        ) : null
+                      ) : null}
+                      {liberado && (
+                        <span className="mt-auto flex items-center justify-center gap-1 w-full py-1.5 border border-[#DDE3E8] group-hover:border-[#7C3AED] group-hover:bg-[#F7F4FE] rounded-lg text-[11px] font-semibold text-[#17212B] transition-colors">
+                          {item.documento_id ? <><RefreshCw className="w-3 h-3" />Substituir</> : <><Upload className="w-3 h-3" />Anexar</>}
+                        </span>
+                      )}
                     </button>
                   );
                 })}
@@ -561,7 +621,7 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
                 ? 'Selecione um documento obrigatório acima ou use o botão abaixo.'
                 : 'Ajuste a busca ou os filtros para ver outros documentos.'}
             </p>
-            {anexados.length === 0 && (
+            {anexados.length === 0 && perm.criar && (
               <button
                 onClick={() => abrirUpload()}
                 className="mt-4 inline-flex items-center gap-2 px-4 py-2.5 bg-[#176B87] hover:bg-[#135a73] text-white text-xs font-semibold rounded-xl transition-colors cursor-pointer"
@@ -572,7 +632,7 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
           </div>
         ) : modoLista ? (
           <div className="divide-y divide-[#EEF1F4]">
-            {anexadosFiltrados.map(doc => {
+            {anexadosPagina.map(doc => {
               const s = statusDoAnexo(doc);
               const Icone = iconeDoTipo(doc.tipo);
               return (
@@ -596,14 +656,14 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
                   <div className="shrink-0 hidden sm:block">
                     <Pill situacao={s} dias={diasParaVencer(doc.data_vencimento)} />
                   </div>
-                  <AcoesDoc doc={doc} ocupado={ocupadoId === doc.id} onVer={() => comArquivo(doc, 'ver')} onBaixar={() => comArquivo(doc, 'baixar')} onExcluir={() => excluir(doc)} />
+                  <AcoesDoc doc={doc} perm={perm} ocupado={ocupadoId === doc.id} onVer={() => comArquivo(doc, 'ver')} onBaixar={() => comArquivo(doc, 'baixar')} onSubstituir={() => abrirSubstituir(doc)} onExcluir={() => setExcluindo(doc)} />
                 </div>
               );
             })}
           </div>
         ) : (
           <div className="p-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-            {anexadosFiltrados.map(doc => {
+            {anexadosPagina.map(doc => {
               const s = statusDoAnexo(doc);
               const Icone = iconeDoTipo(doc.tipo);
               return (
@@ -639,14 +699,56 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
 
                   <div className="flex items-center justify-between gap-2 border-t border-[#EEF1F4] pt-2.5">
                     <span className="text-[10px] text-[#8995A1]">{formatBytes(doc.tamanho_bytes)}</span>
-                    <AcoesDoc doc={doc} ocupado={ocupadoId === doc.id} onVer={() => comArquivo(doc, 'ver')} onBaixar={() => comArquivo(doc, 'baixar')} onExcluir={() => excluir(doc)} />
+                    <AcoesDoc doc={doc} perm={perm} ocupado={ocupadoId === doc.id} onVer={() => comArquivo(doc, 'ver')} onBaixar={() => comArquivo(doc, 'baixar')} onSubstituir={() => abrirSubstituir(doc)} onExcluir={() => setExcluindo(doc)} />
                   </div>
                 </div>
               );
             })}
           </div>
         )}
+
+        {/* Paginação — só aparece quando há mais de uma página */}
+        {!isLoading && totalPaginas > 1 && (
+          <div className="px-5 py-3 border-t border-[#E4E9ED] flex items-center justify-between gap-3">
+            <span className="text-[11px] text-[#687582]">
+              {(paginaAtual - 1) * POR_PAGINA + 1}–{Math.min(paginaAtual * POR_PAGINA, anexadosFiltrados.length)} de{' '}
+              {anexadosFiltrados.length}
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPagina(p => Math.max(1, p - 1))}
+                disabled={paginaAtual === 1}
+                aria-label="Página anterior"
+                className="p-1.5 border border-[#DDE3E8] rounded-lg text-[#687582] hover:bg-[#F8FAFB] disabled:opacity-40 cursor-pointer"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
+              <span className="px-2 text-[11px] font-semibold text-[#17212B]">
+                {paginaAtual} / {totalPaginas}
+              </span>
+              <button
+                onClick={() => setPagina(p => Math.min(totalPaginas, p + 1))}
+                disabled={paginaAtual === totalPaginas}
+                aria-label="Próxima página"
+                className="p-1.5 border border-[#DDE3E8] rounded-lg text-[#687582] hover:bg-[#F8FAFB] disabled:opacity-40 cursor-pointer"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
       </section>
+
+      {/* ── E. Histórico e versões anteriores (carrega só quando aberto) ── */}
+      {perm.visualizar && (
+        <HistoricoDocumentosPanel
+          colaboradorId={colaborador.id}
+          podeRestaurar={perm.excluir}
+          onAbrir={comArquivo}
+          onRestaurado={carregar}
+          versao={versao}
+        />
+      )}
 
       {showUpload && (
         <UploadDocumentoModal
@@ -654,8 +756,28 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
           empresaId={colaborador.empresa_id || 'geral'}
           catalogo={catalogo}
           tipoPreSelecionado={uploadTipo}
-          onClose={() => { setShowUpload(false); setUploadTipo(undefined); }}
+          substituindo={substituindo}
+          onClose={() => { setShowUpload(false); setUploadTipo(undefined); setSubstituindo(undefined); }}
           onSuccess={carregar}
+        />
+      )}
+
+      {showLote && (
+        <AnexarLoteModal
+          colaboradorId={colaborador.id}
+          empresaId={colaborador.empresa_id || 'geral'}
+          catalogo={catalogo}
+          onClose={() => setShowLote(false)}
+          onConcluido={carregar}
+        />
+      )}
+
+      {excluindo && (
+        <ExcluirDocumentoModal
+          doc={excluindo}
+          ocupado={ocupadoId === excluindo.id}
+          onCancelar={() => setExcluindo(null)}
+          onConfirmar={motivo => confirmarExclusao(excluindo, motivo)}
         />
       )}
 
@@ -664,53 +786,107 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
   );
 };
 
-/** Ver / baixar / substituir / excluir — respeitando o carregamento em curso. */
+/** Ver / baixar / substituir / excluir — cada botão só aparece com a permissão. */
 function AcoesDoc({
   doc,
+  perm,
   ocupado,
   onVer,
   onBaixar,
+  onSubstituir,
   onExcluir,
 }: {
   doc: Documento;
+  perm: PermissoesDocumentos;
   ocupado: boolean;
   onVer: () => void;
   onBaixar: () => void;
+  onSubstituir: () => void;
   onExcluir: () => void;
 }) {
+  const botao =
+    'p-1.5 text-[#687582] rounded-lg transition-colors cursor-pointer disabled:opacity-50';
   return (
     <div className="flex items-center gap-0.5 shrink-0">
-      <button
-        onClick={onVer}
-        disabled={ocupado}
-        title={`Visualizar ${doc.nome}`}
-        aria-label="Visualizar"
-        className="p-1.5 text-[#687582] hover:text-[#7C3AED] hover:bg-[#F7F4FE] rounded-lg transition-colors cursor-pointer disabled:opacity-50"
-      >
+      <button onClick={onVer} disabled={ocupado} title={`Visualizar ${doc.nome}`} aria-label="Visualizar"
+        className={`${botao} hover:text-[#7C3AED] hover:bg-[#F7F4FE]`}>
         {ocupado ? (
           <span className="block w-3.5 h-3.5 border-2 border-[#7C3AED]/30 border-t-[#7C3AED] rounded-full animate-spin" />
         ) : (
           <Eye className="w-3.5 h-3.5" />
         )}
       </button>
-      <button
-        onClick={onBaixar}
-        disabled={ocupado}
-        title="Baixar"
-        aria-label="Baixar"
-        className="p-1.5 text-[#687582] hover:text-[#176B87] hover:bg-[#EEF4F7] rounded-lg transition-colors cursor-pointer disabled:opacity-50"
-      >
+      <button onClick={onBaixar} disabled={ocupado} title="Baixar" aria-label="Baixar"
+        className={`${botao} hover:text-[#176B87] hover:bg-[#EEF4F7]`}>
         <Download className="w-3.5 h-3.5" />
       </button>
-      <button
-        onClick={onExcluir}
-        disabled={ocupado}
-        title="Excluir"
-        aria-label="Excluir"
-        className="p-1.5 text-[#687582] hover:text-[#D64550] hover:bg-[#FDEBEC] rounded-lg transition-colors cursor-pointer disabled:opacity-50"
-      >
-        <Trash2 className="w-3.5 h-3.5" />
-      </button>
+      {perm.editar && (
+        <button onClick={onSubstituir} disabled={ocupado} title="Substituir" aria-label="Substituir"
+          className={`${botao} hover:text-[#D4890A] hover:bg-[#FEF3E0]`}>
+          <RefreshCw className="w-3.5 h-3.5" />
+        </button>
+      )}
+      {perm.excluir && (
+        <button onClick={onExcluir} disabled={ocupado} title="Excluir" aria-label="Excluir"
+          className={`${botao} hover:text-[#D64550] hover:bg-[#FDEBEC]`}>
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Confirmação de exclusão com motivo. Deixa claro que dá para restaurar. */
+function ExcluirDocumentoModal({
+  doc,
+  ocupado,
+  onCancelar,
+  onConfirmar,
+}: {
+  doc: Documento;
+  ocupado: boolean;
+  onCancelar: () => void;
+  onConfirmar: (motivo: string) => void;
+}) {
+  const [motivo, setMotivo] = useState('');
+  return (
+    <div className="fixed inset-0 z-50 bg-[#0B1620]/60 flex items-center justify-center p-4" onClick={() => !ocupado && onCancelar()}>
+      <div className="doc-entrada bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+        <div className="flex items-start gap-3">
+          <div className="w-9 h-9 rounded-xl bg-[#FDEBEC] flex items-center justify-center shrink-0">
+            <Trash2 className="w-4 h-4 text-[#D64550]" />
+          </div>
+          <div className="min-w-0">
+            <h2 className="text-sm font-bold text-[#17212B]">Excluir documento</h2>
+            <p className="text-xs text-[#687582] mt-1 break-words">
+              <strong className="text-[#17212B]">{doc.nome}</strong> ({doc.nome_arquivo}) sai da lista e dos indicadores.
+              O arquivo continua guardado e pode ser <strong>restaurado</strong> em Histórico e versões anteriores.
+            </p>
+          </div>
+        </div>
+        <label htmlFor="motivo-exclusao" className="block text-xs font-semibold text-[#17212B] mt-4 mb-1">
+          Motivo <span className="font-normal text-[#8995A1]">(opcional, fica no histórico)</span>
+        </label>
+        <textarea
+          id="motivo-exclusao"
+          value={motivo}
+          onChange={e => setMotivo(e.target.value)}
+          rows={2}
+          maxLength={300}
+          placeholder="Ex.: enviado para o colaborador errado"
+          className="w-full px-3 py-2 text-xs border border-[#DDE3E8] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D64550]/25 resize-none"
+        />
+        <div className="flex gap-2 mt-4">
+          <button onClick={onCancelar} disabled={ocupado}
+            className="flex-1 py-2.5 text-xs font-semibold text-[#687582] bg-[#F4F6F8] hover:bg-[#E4E9ED] rounded-lg cursor-pointer disabled:opacity-40">
+            Cancelar
+          </button>
+          <button onClick={() => onConfirmar(motivo.trim())} disabled={ocupado}
+            className="flex-1 py-2.5 text-xs font-semibold text-white bg-[#D64550] hover:bg-[#BF3743] rounded-lg cursor-pointer disabled:opacity-50">
+            {ocupado ? 'Excluindo...' : 'Excluir'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

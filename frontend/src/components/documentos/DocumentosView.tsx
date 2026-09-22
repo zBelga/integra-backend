@@ -71,7 +71,7 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({ selectedEmpresaI
       const colaboradores: Colaborador[] = res.data || [];
 
       // Uma única requisição traz o resumo de todos (antes era uma por pessoa)
-      let resumo: Record<string, { total: number; tipos: string[]; docs: DocumentoResumo[] }> = {};
+      let resumo: Record<string, { total: number; tipos: string[]; tipo_ids?: string[]; docs: DocumentoResumo[] }> = {};
       let tipos: DocumentoTipo[] = [];
       let exigencias: Record<string, string[]> = {};
       try {
@@ -98,6 +98,7 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({ selectedEmpresaI
         const docs = r?.docs || [];
         const vencimentos = docs.map(d => d.data_vencimento).filter(Boolean);
         const tiposPresentes = new Set(r?.tipos || []);
+        const idsPresentes = new Set(r?.tipo_ids || []);
 
         return {
           colaborador: col,
@@ -110,7 +111,8 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({ selectedEmpresaI
           pendentes: (exigencias[normalizar(col.funcao)] || [])
             .map(id => tipoPorId.get(id))
             .filter((t): t is DocumentoTipo => !!t)
-            .filter(t => !tiposPresentes.has(t.codigo) && !tiposPresentes.has(t.nome))
+            // Vínculo estável (tipo_id) primeiro; código/nome só para registros antigos
+            .filter(t => !idsPresentes.has(t.id) && !tiposPresentes.has(t.codigo) && !tiposPresentes.has(t.nome))
             .map(t => t.codigo),
           carregando: false,
         };

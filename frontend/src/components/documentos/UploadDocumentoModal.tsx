@@ -21,6 +21,8 @@ interface UploadDocumentoModalProps {
   catalogo: TipoCatalogo[];
   /** Quando vem do checklist, já chega com o tipo escolhido */
   tipoPreSelecionado?: { id: string; codigo: string; nome: string };
+  /** Substituição: o documento atual vai para o histórico e este passa a valer */
+  substituindo?: { id: string; nome: string };
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -32,6 +34,7 @@ export const UploadDocumentoModal: React.FC<UploadDocumentoModalProps> = ({
   empresaId,
   catalogo,
   tipoPreSelecionado,
+  substituindo,
   onClose,
   onSuccess,
 }) => {
@@ -111,6 +114,10 @@ export const UploadDocumentoModal: React.FC<UploadDocumentoModalProps> = ({
     e.preventDefault();
     if (!selectedFile) { setError('Selecione um arquivo.'); return; }
     if (!tipoCfg) { setError('Selecione o tipo do documento.'); return; }
+    if (tipoCfg.tem_validade && !dataVencimento) {
+      setError('Este tipo de documento exige a data de validade.');
+      return;
+    }
     if (!nome.trim()) { setError('Informe um nome para o documento.'); return; }
     if (dataEmissao && dataVencimento && dataVencimento < dataEmissao) {
       setError('A data de vencimento não pode ser anterior à emissão.');
@@ -139,6 +146,7 @@ export const UploadDocumentoModal: React.FC<UploadDocumentoModalProps> = ({
         empresa_id: empresaId,
         tipo: tipoCfg.codigo,
         tipo_id: tipoCfg.id,
+        substitui_id: substituindo?.id,
         nome: nome.trim(),
         nome_arquivo: selectedFile.name,
         fileBase64,
@@ -169,7 +177,9 @@ export const UploadDocumentoModal: React.FC<UploadDocumentoModalProps> = ({
               <Upload className="w-4 h-4 text-[#176B87]" />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-[#17212B]">Anexar Documento</h2>
+              <h2 className="text-sm font-bold text-[#17212B]">
+                {substituindo ? 'Substituir documento' : 'Anexar Documento'}
+              </h2>
               <p className="text-xs text-[#687582]">PDF, JPG, PNG ou WEBP · máx. {MAX_MB} MB</p>
             </div>
           </div>
@@ -183,6 +193,13 @@ export const UploadDocumentoModal: React.FC<UploadDocumentoModalProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4 overflow-y-auto">
+          {substituindo && (
+            <div className="rounded-lg border border-[#F8D99B] bg-[#FEF3E0] px-3 py-2 text-[11px] text-[#7A4C06] leading-snug">
+              O documento atual <strong>"{substituindo.nome}"</strong> sai da lista, mas continua guardado
+              em <strong>Histórico e versões anteriores</strong>.
+            </div>
+          )}
+
           {/* Dropzone */}
           <div
             onClick={() => !isLoading && fileInputRef.current?.click()}
@@ -272,7 +289,7 @@ export const UploadDocumentoModal: React.FC<UploadDocumentoModalProps> = ({
             </div>
             <div>
               <label className="block text-xs font-semibold text-[#17212B] mb-1">
-                Vencimento
+                Vencimento{tipoCfg?.tem_validade ? ' *' : ''}
                 {tipoCfg?.validade_meses ? (
                   <span className="ml-1 text-[9px] text-[#159A72] font-bold inline-flex items-center gap-0.5">
                     <Sparkles className="w-2.5 h-2.5" />{tipoCfg.validade_meses}m
@@ -346,7 +363,7 @@ export const UploadDocumentoModal: React.FC<UploadDocumentoModalProps> = ({
               ) : (
                 <>
                   <Upload className="w-3.5 h-3.5" />
-                  Anexar Documento
+                  {substituindo ? 'Substituir' : 'Anexar Documento'}
                 </>
               )}
             </button>

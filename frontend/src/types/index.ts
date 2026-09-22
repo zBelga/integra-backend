@@ -309,8 +309,32 @@ export interface IndicadoresDocumentos {
   conformidade: number | null;
 }
 
+/** O que o usuário logado pode fazer com documentos (matriz de permissões por cargo). */
+export interface PermissoesDocumentos {
+  visualizar: boolean;
+  criar: boolean;
+  editar: boolean;
+  excluir: boolean;
+}
+
+export interface EventoHistorico {
+  id: string;
+  acao: 'enviado' | 'substituido' | 'excluido' | 'restaurado' | string;
+  usuario_nome: string;
+  detalhes: string;
+  documento_id: string | null;
+  created_at: string;
+}
+
+export interface HistoricoDocumentos {
+  eventos: EventoHistorico[];
+  /** Versões fora de uso: substituídas ou excluídas. Continuam guardadas. */
+  versoes: Documento[];
+}
+
 export interface ChecklistColaborador {
   colaborador: Colaborador;
+  permissoes?: PermissoesDocumentos;
   checklist: ChecklistItem[];
   anexados: Documento[];
   catalogo: Array<Pick<DocumentoTipo, 'id' | 'codigo' | 'nome' | 'descricao' | 'tem_validade' | 'validade_meses' | 'dias_alerta'>>;
@@ -338,6 +362,12 @@ export interface Documento {
   status: string;
   observacoes?: string;
   uploaded_by?: string;
+  tipo_id?: string | null;
+  substituido_por?: string | null;
+  substituido_em?: string | null;
+  excluido_por?: string | null;
+  excluido_em?: string | null;
+  motivo_exclusao?: string;
   created_at?: string;
   updated_at?: string;
 }

@@ -1,4 +1,11 @@
 import initSqlJs, { Database } from 'sql.js';
+import {
+  queryRowsSupabase,
+  executeQuerySupabase,
+  importarDoSqlite,
+  importacaoJaFeita,
+  contarTabelas,
+} from './dbSupabase.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -16,7 +23,7 @@ const SCHEMA_FILE = path.join(SCHEMA_DIR, 'schema.sql');
 
 let db: Database | null = null;
 
-export async function getDb(): Promise<Database> {
+async function getDbSqlite(): Promise<Database> {
   if (db) return db;
 
   const SQL = await initSqlJs({
@@ -279,19 +286,19 @@ export async function getDb(): Promise<Database> {
 
     if (count === 0) {
       seedDefaultObras(db);
-      saveDbToDisk();
+      saveDbToDiskSqlite();
     }
   } catch (err) {
     seedDefaultObras(db);
-    saveDbToDisk();
+    saveDbToDiskSqlite();
   }
 
-  saveDbToDisk();
+  saveDbToDiskSqlite();
 
   return db;
 }
 
-export function saveDbToDisk() {
+function saveDbToDiskSqlite() {
   if (!db) return;
   try {
     const data = db.export();
@@ -762,8 +769,8 @@ function seedDefaultSolicitacoes(database: Database) {
 /**
  * Executes a parameterized SQL SELECT query and returns array of objects
  */
-export async function queryRows<T = any>(sql: string, params: any[] = []): Promise<T[]> {
-  const database = await getDb();
+async function queryRowsSqlite<T = any>(sql: string, params: any[] = []): Promise<T[]> {
+  const database = await getDbSqlite();
   const stmt = database.prepare(sql);
   stmt.bind(params);
 
@@ -778,8 +785,118 @@ export async function queryRows<T = any>(sql: string, params: any[] = []): Promi
 /**
  * Executes a parameterized SQL query that modifies data (INSERT, UPDATE, DELETE)
  */
-export async function executeQuery(sql: string, params: any[] = []): Promise<void> {
-  const database = await getDb();
+async function executeQuerySqlite(sql: string, params: any[] = []): Promise<void> {
+  const database = await getDbSqlite();
   database.run(sql, params);
-  saveDbToDisk();
+  saveDbToDiskSqlite();
+}
+
+
+// ═════════════════════════════════════════════════════════════
+// SELEÇÃO DO BANCO
+// ─────────────────────────────────────────────────────────────
+// DB_MODE=sqlite   (padrão) → arquivo SQLite no volume do Railway
+// DB_MODE=supabase          → PostgreSQL do Supabase
+//
+// Na PRIMEIRA vez em modo Supabase, os dados do SQLite são copiados para lá
+// numa única transação e conferidos tabela a tabela. Se algo falhar nesse
+// momento, o servidor continua no SQLite (nada é perdido) e avisa no log.
+// Depois que a cópia foi concluída, o Supabase passa a ser o banco oficial.
+// O arquivo do SQLite nunca é apagado nem alterado pela migração.
+// ═════════════════════════════════════════════════════════════
+
+type ModoBanco = 'sqlite' | 'supabase';
+let modo: ModoBanco = String(process.env.DB_MODE || 'sqlite').toLowerCase() === 'supabase' ? 'supabase' : 'sqlite';
+let iniciado = false;
+
+export function modoBanco(): ModoBanco {
+  return modo;
+}
+
+/** Lê uma tabela do arquivo SQLite sem rodar seeds nem alterar nada. */
+async function abrirSqliteSomenteLeitura(): Promise<Database | null> {
+  if (!fs.existsSync(DB_FILE)) return null;
+  const SQL = await initSqlJs({
+    locateFile: (file: string) => path.join(process.cwd(), 'node_modules', 'sql.js', 'dist', file),
+  });
+  return new SQL.Database(new Uint8Array(fs.readFileSync(DB_FILE)));
+}
+
+async function iniciarSupabase(): Promise<void> {
+  const feita = await importacaoJaFeita();
+
+  if (!feita) {
+    console.log('🔄 [DB] Primeira inicialização no Supabase — copiando dados do SQLite...');
+    const antigo = await abrirSqliteSomenteLeitura();
+    if (!antigo) {
+      throw new Error(`Arquivo do banco antigo não encontrado em ${DB_FILE}. Nada foi copiado.`);
+    }
+    try {
+      const copiadas = await importarDoSqlite(tabela => {
+        const r = antigo.exec(`SELECT * FROM ${tabela}`);
+        if (!r.length) {
+          const info = antigo.exec(`PRAGMA table_info(${tabela})`);
+          return { colunas: (info[0]?.values || []).map(v => String(v[1])), linhas: [] };
+        }
+        return { colunas: r[0].columns, linhas: r[0].values as any[][] };
+      });
+      console.log('✅ [DB] Cópia concluída e conferida:', JSON.stringify(copiadas));
+    } finally {
+      antigo.close();
+    }
+  }
+
+  const contagem = await contarTabelas();
+  console.log('🗄️  [DB] Banco: SUPABASE (PostgreSQL)');
+  console.log(
+    `    ${contagem.empresas} empresas, ${contagem.usuarios} usuários, ` +
+    `${contagem.colaboradores} colaboradores, ${contagem.admissoes} admissões`
+  );
+}
+
+/** Chamado uma vez no boot do servidor. */
+export async function getDb(): Promise<void> {
+  if (iniciado) return;
+
+  if (modo === 'supabase') {
+    let jaMigrado = false;
+    try {
+      jaMigrado = !!(await importacaoJaFeita());
+    } catch {
+      /* sem resposta do Supabase: decide abaixo */
+    }
+
+    try {
+      await iniciarSupabase();
+      iniciado = true;
+      return;
+    } catch (err: any) {
+      if (jaMigrado) {
+        // Supabase já é o banco oficial: voltar ao SQLite mostraria dados velhos.
+        // Melhor falhar e deixar o Railway reiniciar.
+        console.error('❌ [DB] Supabase indisponível e ele já é o banco oficial:', err.message);
+        throw err;
+      }
+      console.error('⚠️  [DB] Não foi possível migrar para o Supabase:', err.message);
+      console.error('    Continuando no SQLite — nenhum dado foi alterado.');
+      modo = 'sqlite';
+    }
+  }
+
+  await getDbSqlite();
+  console.log('🗄️  [DB] Banco: SQLite (' + DB_FILE + ')');
+  iniciado = true;
+}
+
+export async function queryRows<T = any>(sql: string, params: any[] = []): Promise<T[]> {
+  return modo === 'supabase' ? queryRowsSupabase<T>(sql, params) : queryRowsSqlite<T>(sql, params);
+}
+
+export async function executeQuery(sql: string, params: any[] = []): Promise<void> {
+  return modo === 'supabase' ? executeQuerySupabase(sql, params) : executeQuerySqlite(sql, params);
+}
+
+/** No Supabase a gravação é imediata; no SQLite salva o arquivo. */
+export function saveDbToDisk(): void {
+  if (modo === 'sqlite') saveDbToDiskSqlite();
 }

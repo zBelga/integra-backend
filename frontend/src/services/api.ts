@@ -36,10 +36,16 @@ function authHeaders(): Record<string, string> {
 
 /** Wrapper de fetch autenticado — resolve a URL contra API_BASE */
 async function apiFetch(input: string, init: RequestInit = {}): Promise<Response> {
-  const headers = {
+  const headers: Record<string, string> = {
     ...(init.headers as Record<string, string> || {}),
     ...authHeaders(),
   };
+  // Corpo em texto (JSON.stringify) sem Content-Type faz o servidor receber
+  // req.body vazio. Define o padrão quando quem chamou não definiu.
+  const temContentType = Object.keys(headers).some(h => h.toLowerCase() === 'content-type');
+  if (typeof init.body === 'string' && !temContentType) {
+    headers['Content-Type'] = 'application/json';
+  }
   const res = await fetch(apiUrl(input), { ...init, headers });
   if (res.status === 401) {
     clearToken();
@@ -666,11 +672,14 @@ export interface UploadDocumentoPayload {
   data_emissao?: string;
   data_vencimento?: string;
   observacoes?: string;
+  /** Quando preenchido, o envio SUBSTITUI esse documento (o antigo fica no histórico) */
+  substitui_id?: string;
 }
 
 export interface DocumentoResumo {
   id: string;
   tipo: string;
+  tipo_id?: string | null;
   data_vencimento: string;
 }
 
@@ -678,6 +687,7 @@ export interface ResumoDocumentos {
   [colaboradorId: string]: {
     total: number;
     tipos: string[];
+    tipo_ids?: string[];
     docs: DocumentoResumo[];
   };
 }
@@ -721,10 +731,31 @@ export async function downloadDocumento(
   return json;
 }
 
-export async function deleteDocumento(id: string): Promise<{ success: boolean }> {
-  const res = await apiFetch(`/api/documentos/${id}`, { method: 'DELETE' });
+/** Exclusão reversível: o arquivo fica guardado e pode ser restaurado pelo histórico. */
+export async function deleteDocumento(id: string, motivo = ''): Promise<{ success: boolean }> {
+  const res = await apiFetch(`/api/documentos/${id}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ motivo }),
+  });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || 'Erro ao excluir documento');
+  return json;
+}
+
+export async function restaurarDocumento(id: string): Promise<{ success: boolean }> {
+  const res = await apiFetch(`/api/documentos/${id}/restaurar`, { method: 'POST' });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Erro ao restaurar documento');
+  return json;
+}
+
+/** Linha do tempo + versões antigas (substituídas e excluídas) de um colaborador. */
+export async function fetchHistoricoColaborador(
+  colaboradorId: string
+): Promise<{ success: boolean; data: import('../types').HistoricoDocumentos }> {
+  const res = await apiFetch(`/api/documentos/historico/${colaboradorId}`);
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Erro ao carregar o histórico');
   return json;
 }
 

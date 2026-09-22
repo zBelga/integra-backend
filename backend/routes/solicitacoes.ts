@@ -97,7 +97,7 @@ router.get('/', async (req: Request, res: Response) => {
       params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
     }
 
-    sql += ' ORDER BY CASE WHEN s.status = "pendente" THEN 0 ELSE 1 END, s.data_solicitacao DESC';
+    sql += ` ORDER BY CASE WHEN s.status = 'pendente' THEN 0 ELSE 1 END, s.data_solicitacao DESC`;
 
     const rows = await queryRows(sql, params);
 

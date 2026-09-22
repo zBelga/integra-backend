@@ -1,8 +1,43 @@
 import { Router, Request, Response } from 'express';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { queryRows } from '../db.js';
+import {
+  pode,
+  permissoesDocumentos,
+  mesmaEmpresa,
+  MENSAGEM_SEM_PERMISSAO,
+} from '../utils/documentosAcesso.js';
 
 const router = Router();
+
+/** Colaborador vem do banco do servidor — é a fonte da empresa dele. */
+async function buscarColaborador(id: string): Promise<any | null> {
+  if (!id) return null;
+  const rows = (await queryRows('SELECT * FROM colaboradores WHERE id = ?', [id])) as any[];
+  return rows[0] || null;
+}
+
+/** Histórico de envio/substituição/exclusão. Nunca derruba a operação principal. */
+async function registrarEventoDocumento(
+  req: Request,
+  ev: { empresa_id: string; colaborador_id: string; documento_id: string; acao: string; detalhes: string }
+) {
+  try {
+    await getSupabase().from('documento_historico').insert({
+      empresa_id: ev.empresa_id,
+      entidade: 'documento',
+      entidade_id: ev.documento_id,
+      documento_id: ev.documento_id,
+      colaborador_id: ev.colaborador_id,
+      acao: ev.acao,
+      usuario_id: req.user?.id || '',
+      usuario_nome: req.user?.nome || '',
+      detalhes: ev.detalhes,
+    });
+  } catch {
+    /* best-effort */
+  }
+}
 
 function getSupabase() {
   const url = process.env.SUPABASE_URL;
@@ -100,25 +135,25 @@ router.get('/checklist/:colaboradorId', async (req: Request, res: Response) => {
   try {
     const sb = getSupabase();
 
-    const colabs = (await queryRows('SELECT * FROM colaboradores WHERE id = ?', [
-      req.params.colaboradorId,
-    ])) as any[];
-
-    if (!colabs.length) {
+    const colaborador = await buscarColaborador(req.params.colaboradorId);
+    if (!colaborador) {
       return res.status(404).json({ success: false, error: 'Colaborador não encontrado.' });
     }
-    const colaborador = colabs[0];
 
     // Isolamento: ninguém lê documentos de colaborador de outra empresa
-    const empresaToken = req.user?.empresa_id;
-    if (empresaToken && req.user?.perfil !== 'master_admin' && colaborador.empresa_id !== empresaToken) {
+    if (!mesmaEmpresa(req, colaborador.empresa_id)) {
       return res.status(403).json({ success: false, error: 'Colaborador de outra empresa.' });
+    }
+    const permissoes = await permissoesDocumentos(req);
+    if (!permissoes.visualizar) {
+      return res.status(403).json({ success: false, error: MENSAGEM_SEM_PERMISSAO.visualizar });
     }
 
     const empresa_id = colaborador.empresa_id;
 
     // Garante o catálogo padrão da empresa (idempotente)
-    await sb.rpc('garantir_tipos_padrao', { p_empresa_id: empresa_id });
+    const { error: erroCatalogo } = await sb.rpc('garantir_tipos_padrao', { p_empresa_id: empresa_id });
+    if (erroCatalogo) throw erroCatalogo;
 
     const [{ todosOsTipos, tiposExigidos }, { data: docs, error }] = await Promise.all([
       exigenciasDaFuncao(sb, empresa_id, colaborador.funcao),
@@ -126,6 +161,7 @@ router.get('/checklist/:colaboradorId', async (req: Request, res: Response) => {
         .from('documentos')
         .select('id, tipo, tipo_id, nome, nome_arquivo, tamanho_bytes, data_emissao, data_vencimento, status, observacoes, created_at')
         .eq('colaborador_id', colaborador.id)
+        .eq('status', 'ativo')
         .order('created_at', { ascending: false }),
     ]);
 
@@ -188,6 +224,7 @@ router.get('/checklist/:colaboradorId', async (req: Request, res: Response) => {
       success: true,
       data: {
         colaborador,
+        permissoes,
         checklist,
         anexados,
         catalogo: todosOsTipos.map(t => ({
@@ -219,26 +256,31 @@ router.get('/resumo', async (req: Request, res: Response) => {
   try {
     const supabase = getSupabase();
     const empresa_id = empresaDoPedido(req);
+    if (!empresa_id) return res.status(400).json({ success: false, error: 'Empresa não identificada.' });
 
-    let q = supabase.from('documentos').select('id, colaborador_id, tipo, data_vencimento');
-    if (empresa_id) q = q.eq('empresa_id', empresa_id); // isolamento entre empresas
-
-    const { data, error } = await q;
+    // Só os ativos: substituídos e excluídos não contam em indicadores
+    const { data, error } = await supabase
+      .from('documentos')
+      .select('id, colaborador_id, tipo, tipo_id, data_vencimento')
+      .eq('empresa_id', empresa_id)
+      .eq('status', 'ativo');
 
     if (error) throw error;
 
-    type DocLeve = { id: string; tipo: string; data_vencimento: string };
-    const resumo: Record<string, { total: number; tipos: string[]; docs: DocLeve[] }> = {};
+    type DocLeve = { id: string; tipo: string; tipo_id: string | null; data_vencimento: string };
+    const resumo: Record<string, { total: number; tipos: string[]; tipo_ids: string[]; docs: DocLeve[] }> = {};
 
     for (const doc of data || []) {
       const id = doc.colaborador_id;
       if (!id) continue;
-      if (!resumo[id]) resumo[id] = { total: 0, tipos: [], docs: [] };
+      if (!resumo[id]) resumo[id] = { total: 0, tipos: [], tipo_ids: [], docs: [] };
       resumo[id].total++;
       if (doc.tipo) resumo[id].tipos.push(doc.tipo);
+      if (doc.tipo_id) resumo[id].tipo_ids.push(doc.tipo_id);
       resumo[id].docs.push({
         id: doc.id,
         tipo: doc.tipo || '',
+        tipo_id: doc.tipo_id || null,
         data_vencimento: doc.data_vencimento || '',
       });
     }
@@ -249,14 +291,70 @@ router.get('/resumo', async (req: Request, res: Response) => {
   }
 });
 
-// GET /api/documentos/colaborador/:id — lista documentos de um colaborador
+/** GET /api/documentos/permissoes — o que o usuário logado pode fazer (a tela usa para esconder botões) */
+router.get('/permissoes', async (req: Request, res: Response) => {
+  try {
+    res.json({ success: true, data: await permissoesDocumentos(req) });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * GET /api/documentos/historico/:colaboradorId
+ * Linha do tempo do colaborador + versões antigas (substituídas e excluídas),
+ * que continuam guardadas e podem ser abertas ou restauradas.
+ */
+router.get('/historico/:colaboradorId', async (req: Request, res: Response) => {
+  try {
+    const colaborador = await buscarColaborador(req.params.colaboradorId);
+    if (!colaborador) return res.status(404).json({ success: false, error: 'Colaborador não encontrado.' });
+    if (!mesmaEmpresa(req, colaborador.empresa_id)) {
+      return res.status(403).json({ success: false, error: 'Colaborador de outra empresa.' });
+    }
+    if (!(await pode(req, 'visualizar'))) {
+      return res.status(403).json({ success: false, error: MENSAGEM_SEM_PERMISSAO.visualizar });
+    }
+
+    const sb = getSupabase();
+    const [{ data: eventos, error: e1 }, { data: versoes, error: e2 }] = await Promise.all([
+      sb
+        .from('documento_historico')
+        .select('id, acao, usuario_nome, detalhes, documento_id, created_at')
+        .eq('colaborador_id', colaborador.id)
+        .order('created_at', { ascending: false })
+        .limit(200),
+      sb
+        .from('documentos')
+        .select('id, tipo, tipo_id, nome, nome_arquivo, tamanho_bytes, data_emissao, data_vencimento, status, created_at, uploaded_by, substituido_por, substituido_em, excluido_por, excluido_em, motivo_exclusao')
+        .eq('colaborador_id', colaborador.id)
+        .neq('status', 'ativo')
+        .order('created_at', { ascending: false }),
+    ]);
+    if (e1) throw e1;
+    if (e2) throw e2;
+
+    res.json({ success: true, data: { eventos: eventos || [], versoes: versoes || [] } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/documentos/colaborador/:id — documentos ATIVOS de um colaborador
 router.get('/colaborador/:id', async (req: Request, res: Response) => {
   try {
+    const colaborador = await buscarColaborador(req.params.id);
+    if (!colaborador) return res.status(404).json({ success: false, error: 'Colaborador não encontrado.' });
+    if (!mesmaEmpresa(req, colaborador.empresa_id)) {
+      return res.status(403).json({ success: false, error: 'Colaborador de outra empresa.' });
+    }
+
     const supabase = getSupabase();
     const { data, error } = await supabase
       .from('documentos')
       .select('*')
       .eq('colaborador_id', req.params.id)
+      .eq('status', 'ativo')
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -266,12 +364,15 @@ router.get('/colaborador/:id', async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/documentos/upload — faz upload de um documento
+/**
+ * POST /api/documentos/upload — anexa um documento.
+ * Com `substitui_id`, é uma SUBSTITUIÇÃO: o anterior vira 'substituido',
+ * continua no Storage e aparece nas versões antigas do histórico.
+ */
 router.post('/upload', async (req: Request, res: Response) => {
   try {
     const {
       colaborador_id,
-      empresa_id,
       tipo,
       nome,
       nome_arquivo,
@@ -280,17 +381,48 @@ router.post('/upload', async (req: Request, res: Response) => {
       data_emissao,
       data_vencimento,
       observacoes,
+      substitui_id,
     } = req.body;
 
     if (!colaborador_id || !tipo || !nome || !nome_arquivo || !fileBase64) {
       return res.status(400).json({ success: false, error: 'Campos obrigatórios faltando.' });
     }
 
+    // A empresa vem do CADASTRO do colaborador, nunca do que a tela mandou
+    const colaborador = await buscarColaborador(colaborador_id);
+    if (!colaborador) return res.status(404).json({ success: false, error: 'Colaborador não encontrado.' });
+    if (!mesmaEmpresa(req, colaborador.empresa_id)) {
+      return res.status(403).json({ success: false, error: 'Colaborador de outra empresa.' });
+    }
+    const empresa_id: string = colaborador.empresa_id;
+
+    const acao = substitui_id ? 'editar' : 'criar';
+    if (!(await pode(req, acao))) {
+      return res.status(403).json({ success: false, error: MENSAGEM_SEM_PERMISSAO[acao] });
+    }
+
     const supabase = getSupabase();
 
-    // Tamanho máximo: 10 MB (o base64 chega ~33% maior)
+    // Documento que será substituído precisa ser deste colaborador e estar ativo
+    let anterior: any = null;
+    if (substitui_id) {
+      const { data } = await supabase
+        .from('documentos')
+        .select('id, colaborador_id, empresa_id, status, nome, tipo')
+        .eq('id', substitui_id)
+        .maybeSingle();
+      if (!data || data.colaborador_id !== colaborador.id || data.status !== 'ativo') {
+        return res.status(400).json({ success: false, error: 'O documento a substituir não está mais disponível.' });
+      }
+      anterior = data;
+    }
+
+    // Validação de tamanho e formato também no servidor
     const MAX_BYTES = 10 * 1024 * 1024;
     const buffer = Buffer.from(fileBase64, 'base64');
+    if (buffer.length === 0) {
+      return res.status(400).json({ success: false, error: 'Arquivo vazio.' });
+    }
     if (buffer.length > MAX_BYTES) {
       return res.status(413).json({
         success: false,
@@ -300,22 +432,37 @@ router.post('/upload', async (req: Request, res: Response) => {
     if (!/\.(pdf|jpe?g|png|webp)$/i.test(String(nome_arquivo))) {
       return res.status(400).json({ success: false, error: 'Formato não aceito. Use PDF, JPG, PNG ou WEBP.' });
     }
+    if (data_emissao && data_vencimento && String(data_vencimento) < String(data_emissao)) {
+      return res.status(400).json({ success: false, error: 'A validade não pode ser anterior à emissão.' });
+    }
 
-    // Vincula ao tipo do catálogo da empresa (identificador estável, não o nome)
+    // Tipo precisa existir no catálogo DESTA empresa (identificador estável)
     let tipo_id: string | null = req.body.tipo_id || null;
-    if (!tipo_id) {
+    if (tipo_id) {
+      const { data: t } = await supabase
+        .from('documento_tipos')
+        .select('id, tem_validade')
+        .eq('id', tipo_id)
+        .eq('empresa_id', empresa_id)
+        .maybeSingle();
+      if (!t) return res.status(400).json({ success: false, error: 'Tipo de documento inválido para esta empresa.' });
+      if (t.tem_validade && !data_vencimento) {
+        return res.status(400).json({ success: false, error: 'Este tipo de documento exige a data de validade.' });
+      }
+    } else {
       const { data: achado } = await supabase
         .from('documento_tipos')
         .select('id')
-        .eq('empresa_id', empresa_id || 'geral')
+        .eq('empresa_id', empresa_id)
         .ilike('codigo', String(tipo).trim())
         .maybeSingle();
       tipo_id = achado?.id || null;
     }
 
     const id = generateId();
-    const ext = nome_arquivo.split('.').pop()?.toLowerCase() || 'bin';
-    const storagePath = `${empresa_id || 'geral'}/${colaborador_id}/${id}.${ext}`;
+    const ext = String(nome_arquivo).split('.').pop()?.toLowerCase() || 'bin';
+    // Caminho separado por empresa: isolamento também dentro do Storage
+    const storagePath = `${empresa_id}/${colaborador.id}/${id}.${ext}`;
 
     const { error: uploadError } = await supabase.storage
       .from('documentos')
@@ -330,8 +477,8 @@ router.post('/upload', async (req: Request, res: Response) => {
       .from('documentos')
       .insert({
         id,
-        colaborador_id,
-        empresa_id: empresa_id || 'geral',
+        colaborador_id: colaborador.id,
+        empresa_id,
         tipo,
         tipo_id,
         nome,
@@ -342,16 +489,39 @@ router.post('/upload', async (req: Request, res: Response) => {
         data_vencimento: data_vencimento || '',
         observacoes: observacoes || '',
         status: 'ativo',
-        uploaded_by: (req as any).user?.nome || '',
+        uploaded_by: req.user?.nome || '',
       })
       .select()
       .single();
 
     if (dbError) {
-      // Rollback: remove o arquivo do storage
+      // Rollback do arquivo que acabou de subir (nenhum registro aponta para ele)
       await supabase.storage.from('documentos').remove([storagePath]);
       throw dbError;
     }
+
+    if (anterior) {
+      await supabase
+        .from('documentos')
+        .update({
+          status: 'substituido',
+          substituido_por: id,
+          substituido_em: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', anterior.id)
+        .eq('status', 'ativo');
+    }
+
+    await registrarEventoDocumento(req, {
+      empresa_id,
+      colaborador_id: colaborador.id,
+      documento_id: id,
+      acao: anterior ? 'substituido' : 'enviado',
+      detalhes: anterior
+        ? `${tipo} — "${anterior.nome}" substituído por "${nome}" (${nome_arquivo})`
+        : `${tipo} — "${nome}" (${nome_arquivo})`,
+    });
 
     res.json({ success: true, data });
   } catch (err: any) {
@@ -359,24 +529,28 @@ router.post('/upload', async (req: Request, res: Response) => {
   }
 });
 
-// GET /api/documentos/:id/download — retorna URL assinada para download
+// GET /api/documentos/:id/download — URL assinada temporária (2 min)
 router.get('/:id/download', async (req: Request, res: Response) => {
   try {
     const supabase = getSupabase();
 
     const { data: doc, error: docError } = await supabase
       .from('documentos')
-      .select('storage_path, nome_arquivo')
+      .select('storage_path, nome_arquivo, empresa_id')
       .eq('id', req.params.id)
       .single();
 
-    if (docError || !doc) {
+    // Mesmo 404 para "não existe" e "é de outra empresa": não revela nada
+    if (docError || !doc || !mesmaEmpresa(req, doc.empresa_id)) {
       return res.status(404).json({ success: false, error: 'Documento não encontrado.' });
+    }
+    if (!(await pode(req, 'visualizar'))) {
+      return res.status(403).json({ success: false, error: MENSAGEM_SEM_PERMISSAO.visualizar });
     }
 
     const { data, error } = await supabase.storage
       .from('documentos')
-      .createSignedUrl(doc.storage_path, 120); // válido por 2 minutos
+      .createSignedUrl(doc.storage_path, 120);
 
     if (error) throw error;
 
@@ -386,29 +560,98 @@ router.get('/:id/download', async (req: Request, res: Response) => {
   }
 });
 
-// DELETE /api/documentos/:id — exclui documento e arquivo
+/**
+ * DELETE /api/documentos/:id — exclusão REVERSÍVEL.
+ * O registro vira 'excluido' e o arquivo continua no Storage. Some da lista
+ * e dos indicadores, mas pode ser restaurado pelo histórico.
+ */
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const supabase = getSupabase();
 
     const { data: doc, error: docError } = await supabase
       .from('documentos')
-      .select('storage_path')
+      .select('id, empresa_id, colaborador_id, status, nome, tipo')
       .eq('id', req.params.id)
       .single();
 
-    if (docError || !doc) {
+    if (docError || !doc || !mesmaEmpresa(req, doc.empresa_id)) {
       return res.status(404).json({ success: false, error: 'Documento não encontrado.' });
     }
+    if (!(await pode(req, 'excluir'))) {
+      return res.status(403).json({ success: false, error: MENSAGEM_SEM_PERMISSAO.excluir });
+    }
+    if (doc.status === 'excluido') return res.json({ success: true });
 
-    await supabase.storage.from('documentos').remove([doc.storage_path]);
+    const motivo = String(req.body?.motivo || req.query.motivo || '').slice(0, 300);
 
-    const { error: dbError } = await supabase
+    const { error } = await supabase
       .from('documentos')
-      .delete()
-      .eq('id', req.params.id);
+      .update({
+        status: 'excluido',
+        excluido_por: req.user?.nome || '',
+        excluido_em: new Date().toISOString(),
+        motivo_exclusao: motivo,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', doc.id);
 
-    if (dbError) throw dbError;
+    if (error) throw error;
+
+    await registrarEventoDocumento(req, {
+      empresa_id: doc.empresa_id,
+      colaborador_id: doc.colaborador_id,
+      documento_id: doc.id,
+      acao: 'excluido',
+      detalhes: `${doc.tipo} — "${doc.nome}"${motivo ? ` · motivo: ${motivo}` : ''}`,
+    });
+
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/** POST /api/documentos/:id/restaurar — desfaz uma exclusão */
+router.post('/:id/restaurar', async (req: Request, res: Response) => {
+  try {
+    const supabase = getSupabase();
+
+    const { data: doc } = await supabase
+      .from('documentos')
+      .select('id, empresa_id, colaborador_id, status, nome, tipo')
+      .eq('id', req.params.id)
+      .maybeSingle();
+
+    if (!doc || !mesmaEmpresa(req, doc.empresa_id)) {
+      return res.status(404).json({ success: false, error: 'Documento não encontrado.' });
+    }
+    if (!(await pode(req, 'excluir'))) {
+      return res.status(403).json({ success: false, error: MENSAGEM_SEM_PERMISSAO.excluir });
+    }
+    if (doc.status !== 'excluido') {
+      return res.status(400).json({ success: false, error: 'Só documentos excluídos podem ser restaurados.' });
+    }
+
+    const { error } = await supabase
+      .from('documentos')
+      .update({
+        status: 'ativo',
+        excluido_por: null,
+        excluido_em: null,
+        motivo_exclusao: '',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', doc.id);
+    if (error) throw error;
+
+    await registrarEventoDocumento(req, {
+      empresa_id: doc.empresa_id,
+      colaborador_id: doc.colaborador_id,
+      documento_id: doc.id,
+      acao: 'restaurado',
+      detalhes: `${doc.tipo} — "${doc.nome}"`,
+    });
 
     res.json({ success: true });
   } catch (err: any) {

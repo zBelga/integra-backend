@@ -248,7 +248,8 @@ router.get('/', async (req: Request, res: Response) => {
     if (!empresa_id) return res.status(400).json({ success: false, error: 'Empresa não identificada.' });
 
     const sb = getSupabase();
-    await sb.rpc('garantir_tipos_padrao', { p_empresa_id: empresa_id });
+    const { error: erroCatalogo } = await sb.rpc('garantir_tipos_padrao', { p_empresa_id: empresa_id });
+    if (erroCatalogo) throw erroCatalogo;
 
     let q = sb.from('documento_tipos').select('*').eq('empresa_id', empresa_id);
     if (req.query.status && req.query.status !== 'all') q = q.eq('status', String(req.query.status));
