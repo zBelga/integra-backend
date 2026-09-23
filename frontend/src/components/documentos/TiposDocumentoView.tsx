@@ -39,6 +39,7 @@ const VAZIO: DocumentoTipoFormData = {
   validade_meses: null,
   dias_alerta: 30,
   status: 'ativo',
+  todos_colaboradores: false,
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -65,6 +66,7 @@ function TipoModal({
           validade_meses: tipo.validade_meses ?? null,
           dias_alerta: tipo.dias_alerta,
           status: tipo.status,
+          todos_colaboradores: !!tipo.todos_colaboradores,
         }
       : VAZIO
   );
@@ -161,6 +163,21 @@ function TipoModal({
               className="w-full px-3 py-2 text-xs border border-[#DDE3E8] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#176B87]/30 focus:border-[#176B87] resize-none"
             />
           </div>
+
+          <label className="flex items-start gap-2.5 cursor-pointer select-none rounded-xl border border-[#E1D9FB] bg-[#F7F4FE] p-3.5">
+            <input
+              type="checkbox"
+              checked={!!form.todos_colaboradores}
+              onChange={e => set('todos_colaboradores', e.target.checked)}
+              className="w-4 h-4 mt-0.5 accent-[#7C3AED] cursor-pointer"
+            />
+            <span>
+              <span className="block text-xs font-semibold text-[#17212B]">Obrigatório para todos os colaboradores</span>
+              <span className="block text-[11px] text-[#687582] mt-0.5">
+                Aparece no checklist de qualquer função. Documentos específicos (ex.: NR 35) ficam em Documentos por Função.
+              </span>
+            </span>
+          </label>
 
           <div className="rounded-xl border border-[#E4E9ED] bg-[#F8FAFB] p-3.5 space-y-3">
             <label className="flex items-center gap-2.5 cursor-pointer select-none w-fit">
@@ -454,6 +471,11 @@ export const TiposDocumentoView: React.FC = () => {
                         {t.padrao && (
                           <span className="px-1.5 py-0.5 bg-[#EEF4F7] text-[#176B87] border border-[#C6E3EB] rounded text-[9px] font-bold">
                             PADRÃO
+                          </span>
+                        )}
+                        {t.todos_colaboradores && (
+                          <span className="px-1.5 py-0.5 bg-[#F1ECFE] text-[#6D28D9] border border-[#E1D9FB] rounded text-[9px] font-bold">
+                            TODOS
                           </span>
                         )}
                       </div>

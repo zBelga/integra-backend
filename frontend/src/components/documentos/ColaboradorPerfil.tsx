@@ -51,6 +51,7 @@ import {
   diasParaVencer,
   formatBytes,
   corConformidade,
+  rotuloCurto,
 } from '../../constants/documentosUI';
 import { applyCPFMask, formatDateBR } from '../../utils/cpfMask';
 
@@ -89,10 +90,22 @@ interface CardIndicadorProps {
   valor: number;
   cor: string;
   fundo: string;
+  ativo?: boolean;
+  onClick?: () => void;
 }
 
-const CardIndicador = React.memo(({ icone, rotulo, valor, cor, fundo }: CardIndicadorProps) => (
-  <div className="bg-white rounded-2xl border border-[#E4E9ED] px-4 py-3.5 flex items-center gap-3 shadow-[0_1px_2px_rgba(23,33,43,0.04)]">
+const CardIndicador = React.memo(({ icone, rotulo, valor, cor, fundo, ativo, onClick }: CardIndicadorProps) => (
+  <button
+    type="button"
+    onClick={onClick}
+    disabled={!onClick}
+    aria-pressed={onClick ? !!ativo : undefined}
+    title={onClick ? (ativo ? 'Mostrar todos os documentos' : `Filtrar: ${rotulo}`) : undefined}
+    className={`text-left bg-white rounded-xl border px-4 py-3.5 flex items-center gap-3 transition-colors ${
+      onClick ? 'cursor-pointer hover:border-[#B6C2CC]' : 'cursor-default'
+    }`}
+    style={{ borderColor: ativo ? cor : '#E4E9ED', boxShadow: ativo ? `0 0 0 1px ${cor}` : undefined }}
+  >
     <div
       className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
       style={{ backgroundColor: fundo, color: cor }}
@@ -105,7 +118,7 @@ const CardIndicador = React.memo(({ icone, rotulo, valor, cor, fundo }: CardIndi
         {valor}
       </p>
     </div>
-  </div>
+  </button>
 ));
 CardIndicador.displayName = 'CardIndicador';
 
@@ -174,7 +187,9 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
   const [filtroTipo, setFiltroTipo] = useState('todos');
   const [filtroStatus, setFiltroStatus] = useState<'todos' | SituacaoDocumento>('todos');
   const [modoLista, setModoLista] = useState(false);
+  const [ordem, setOrdem] = useState<'recentes' | 'antigos' | 'vencimento' | 'nome'>('recentes');
   const [verTodosObrigatorios, setVerTodosObrigatorios] = useState(false);
+  const [showListaCompleta, setShowListaCompleta] = useState(false);
 
   const [ocupadoId, setOcupadoId] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ url: string; nome: string } | null>(null);
@@ -225,7 +240,7 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
 
   const anexadosFiltrados = useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    return anexados.filter(d => {
+    const lista = anexados.filter(d => {
       if (filtroTipo !== 'todos' && d.tipo !== filtroTipo) return false;
       if (filtroStatus !== 'todos') {
         const s = statusDoAnexo(d);
@@ -239,7 +254,15 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
         d.nome_arquivo.toLowerCase().includes(termo)
       );
     });
-  }, [anexados, busca, filtroTipo, filtroStatus, statusDoAnexo]);
+    const data = (d: Documento) => String(d.created_at || '');
+    const venc = (d: Documento) => String(d.data_vencimento || '9999-12-31');
+    return [...lista].sort((a, b) => {
+      if (ordem === 'antigos') return data(a).localeCompare(data(b));
+      if (ordem === 'vencimento') return venc(a).localeCompare(venc(b));
+      if (ordem === 'nome') return a.nome.localeCompare(b.nome, 'pt-BR');
+      return data(b).localeCompare(data(a));
+    });
+  }, [anexados, busca, filtroTipo, filtroStatus, statusDoAnexo, ordem]);
 
   // Paginação no cliente: a lista já é só metadado, então não há custo de rede
   const POR_PAGINA = 12;
@@ -250,7 +273,11 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
     [anexadosFiltrados, paginaAtual]
   );
   // Mudou filtro/busca → volta para a primeira página
-  useEffect(() => { setPagina(1); }, [busca, filtroTipo, filtroStatus]);
+  useEffect(() => { setPagina(1); }, [busca, filtroTipo, filtroStatus, ordem]);
+
+  /** Clicar num indicador filtra a lista de anexados; clicar de novo limpa. */
+  const alternarFiltroStatus = (s: 'vencido' | 'a_vencer') =>
+    setFiltroStatus(atual => (atual === s ? 'todos' : s));
 
   const tiposPresentes = useMemo(
     () => Array.from(new Set(anexados.map(d => d.tipo))).sort(),
@@ -258,7 +285,7 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
   );
 
   const obrigatoriosVisiveis = useMemo(() => {
-    if (verTodosObrigatorios) return checklist;
+    if (verTodosObrigatorios || checklist.length <= 18) return checklist;
     // Pendentes e vencidos primeiro — é o que precisa de ação
     const peso: Record<string, number> = { pendente: 0, vencido: 1, a_vencer: 2, valido: 3, sem_validade: 3 };
     return [...checklist].sort((a, b) => peso[a.situacao] - peso[b.situacao]).slice(0, 9);
@@ -334,40 +361,40 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
         <span className="font-semibold text-[#17212B]">Documentos</span>
       </nav>
 
-      {/* ── A. Identificação + conformidade ── */}
+      {/* ── A. Identificação + conformidade + indicadores (um cartão só) ── */}
       <section className="bg-white rounded-2xl border border-[#E4E9ED] shadow-[0_1px_2px_rgba(23,33,43,0.04)] overflow-hidden">
         <div className="p-5 flex flex-col lg:flex-row lg:items-center gap-5">
-          <div className="flex items-start gap-4 flex-1 min-w-0">
-            <div className="w-14 h-14 rounded-2xl bg-[#EEF4F7] border border-[#DDE7EC] flex items-center justify-center shrink-0">
-              <User className="w-7 h-7 text-[#176B87]" />
+          <div className="flex items-center gap-4 flex-1 min-w-0">
+            <div className="w-16 h-16 rounded-2xl bg-[#EEF4F7] border border-[#DDE7EC] flex items-center justify-center shrink-0">
+              <User className="w-8 h-8 text-[#176B87]" strokeWidth={1.6} />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-lg font-bold text-[#17212B] truncate">{colaborador.nome}</h1>
+                <h1 className="text-xl font-bold text-[#17212B] truncate">{colaborador.nome}</h1>
                 {colaborador.numero_chapa && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#EEF4F7] text-[#176B87] border border-[#C6E3EB] rounded-md text-[11px] font-bold">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#EEF4F7] text-[#176B87] border border-[#C6E3EB] rounded-md text-xs font-bold">
                     <Hash className="w-3 h-3" />{colaborador.numero_chapa}
                   </span>
                 )}
               </div>
-              <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-[#687582]">
-                <span className="flex items-center gap-1.5"><Briefcase className="w-3.5 h-3.5" />{colaborador.funcao}</span>
-                <span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" />Admissão: {formatDateBR(colaborador.data_admissao)}</span>
-                <span className="flex items-center gap-1.5"><CreditCard className="w-3.5 h-3.5" />{applyCPFMask(colaborador.cpf)}</span>
+              <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1.5 text-[13px] text-[#687582]">
+                <span className="flex items-center gap-1.5"><Briefcase className="w-4 h-4" />{colaborador.funcao}</span>
+                <span className="flex items-center gap-1.5"><Calendar className="w-4 h-4" />Admissão: {formatDateBR(colaborador.data_admissao)}</span>
+                <span className="flex items-center gap-1.5"><CreditCard className="w-4 h-4" />{applyCPFMask(colaborador.cpf)}</span>
                 {colaborador.obra_nome && (
-                  <span className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" />{colaborador.obra_nome}</span>
+                  <span className="flex items-center gap-1.5"><MapPin className="w-4 h-4" />{colaborador.obra_nome}</span>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Barra de conformidade */}
-          <div className="lg:border-l lg:border-[#E4E9ED] lg:pl-5 w-full lg:w-[340px] shrink-0">
+          {/* Conformidade */}
+          <div className="lg:border-l lg:border-[#E4E9ED] lg:pl-6 w-full lg:w-[380px] shrink-0">
             {semExigencias ? (
               <div className="rounded-xl bg-[#F8FAFB] border border-[#E4E9ED] px-3.5 py-3">
-                <p className="text-xs font-semibold text-[#17212B]">Sem exigências configuradas</p>
+                <p className="text-xs font-semibold text-[#17212B]">Nenhum documento obrigatório</p>
                 <p className="text-[11px] text-[#687582] mt-0.5 leading-snug">
-                  Nenhum documento foi definido como obrigatório para a função{' '}
+                  Marque os documentos básicos em Tipos de Documentos ou os específicos da função{' '}
                   <strong className="text-[#17212B]">{colaborador.funcao}</strong>.
                 </p>
                 {onConfigurarExigencias && (
@@ -381,29 +408,57 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
               </div>
             ) : (
               <>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[11px] font-semibold text-[#687582]">Conformidade de Documentos</span>
-                  <span className="text-sm font-bold" style={{ color: corConformidade(pct) }}>{pct}%</span>
+                <div className="flex items-center justify-between mb-2.5">
+                  <span className="text-[13px] font-bold text-[#17212B]">Conformidade de Documentos</span>
+                  <span className="text-base font-bold" style={{ color: corConformidade(pct) }}>{pct}%</span>
                 </div>
-                <div className="h-2 bg-[#EEF1F4] rounded-full overflow-hidden">
-                  <div
-                    className="h-full rounded-full doc-barra"
-                    style={{ width: `${pct}%`, backgroundColor: corConformidade(pct) }}
-                  />
-                </div>
-                <div className="flex items-center justify-between mt-2 gap-3">
-                  <p className="text-[11px] text-[#687582]">
-                    {ind?.validos ?? 0} de {ind?.obrigatorios ?? 0} documentos obrigatórios
-                  </p>
+                <div className="flex items-center gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="h-2 bg-[#EEF1F4] rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full doc-barra"
+                        style={{ width: `${pct}%`, backgroundColor: corConformidade(pct) }}
+                      />
+                    </div>
+                    <p className="text-[11px] text-[#687582] mt-2">
+                      {ind?.validos ?? 0} de {ind?.obrigatorios ?? 0} documentos obrigatórios
+                    </p>
+                  </div>
                   <button
-                    onClick={() => setVerTodosObrigatorios(v => !v)}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 border border-[#DDE3E8] rounded-lg text-[11px] font-semibold text-[#17212B] hover:bg-[#F8FAFB] transition-colors cursor-pointer shrink-0"
+                    onClick={() => setShowListaCompleta(true)}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 border border-[#176B87] rounded-xl text-xs font-semibold text-[#176B87] hover:bg-[#EEF4F7] transition-colors cursor-pointer shrink-0"
                   >
-                    <ListChecks className="w-3.5 h-3.5" /> Ver checklist
+                    <ListChecks className="w-4 h-4" /> Ver checklist
                   </button>
                 </div>
               </>
             )}
+          </div>
+        </div>
+
+        {/* Indicadores — Vencidos e A vencer filtram a lista de anexados */}
+        <div className="border-t border-[#EEF1F4] p-4 grid grid-cols-2 lg:grid-cols-5 gap-3">
+          <CardIndicador icone={<FileText className="w-5 h-5" />} rotulo="Total de Documentos" valor={ind?.total ?? 0} cor="#176B87" fundo="#EEF4F7" />
+          <CardIndicador icone={<Calendar className="w-5 h-5" />} rotulo="Vencidos" valor={ind?.vencidos ?? 0} cor="#D64550" fundo="#FDEBEC"
+            ativo={filtroStatus === 'vencido'} onClick={() => alternarFiltroStatus('vencido')} />
+          <CardIndicador icone={<Clock className="w-5 h-5" />} rotulo="A Vencer" valor={ind?.a_vencer ?? 0} cor="#D4890A" fundo="#FEF3E0"
+            ativo={filtroStatus === 'a_vencer'} onClick={() => alternarFiltroStatus('a_vencer')} />
+          <CardIndicador icone={<ShieldAlert className="w-5 h-5" />} rotulo="Pendentes" valor={ind?.pendentes ?? 0} cor="#7C3AED" fundo="#F1ECFE" />
+
+          <div className="col-span-2 lg:col-span-1 rounded-xl border px-4 py-3.5 flex items-center gap-3 bg-[#E8F6F1] border-[#B8E8D9]">
+            <CheckCircle2 className="w-6 h-6 text-white fill-[#159A72] shrink-0" />
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-[#17212B] leading-tight">
+                {(ind?.vencidos ?? 0) + (ind?.pendentes ?? 0) === 0 && !semExigencias
+                  ? 'Documentação em dia'
+                  : 'Mantenha os documentos em dia'}
+              </p>
+              <p className="text-[11px] text-[#687582] leading-snug mt-0.5">
+                {(ind?.vencidos ?? 0) + (ind?.pendentes ?? 0) === 0 && !semExigencias
+                  ? 'Nenhuma pendência para este colaborador.'
+                  : 'Evite bloqueios e mantenha a conformidade.'}
+              </p>
+            </div>
           </div>
         </div>
       </section>
@@ -418,34 +473,10 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
         </div>
       )}
 
-      {/* ── B. Indicadores ── */}
-      <section className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-        <CardIndicador icone={<FileText className="w-5 h-5" />} rotulo="Total de Documentos" valor={ind?.total ?? 0} cor="#176B87" fundo="#EEF4F7" />
-        <CardIndicador icone={<AlertCircle className="w-5 h-5" />} rotulo="Vencidos" valor={ind?.vencidos ?? 0} cor="#D64550" fundo="#FDEBEC" />
-        <CardIndicador icone={<Clock className="w-5 h-5" />} rotulo="A Vencer" valor={ind?.a_vencer ?? 0} cor="#D4890A" fundo="#FEF3E0" />
-        <CardIndicador icone={<ShieldAlert className="w-5 h-5" />} rotulo="Pendentes" valor={ind?.pendentes ?? 0} cor="#7C3AED" fundo="#F1ECFE" />
-
-        <div className="col-span-2 lg:col-span-1 rounded-2xl border px-4 py-3.5 flex items-center gap-3 bg-[#E8F6F1] border-[#B8E8D9]">
-          <CheckCircle2 className="w-5 h-5 text-[#159A72] shrink-0" />
-          <div className="min-w-0">
-            <p className="text-xs font-bold text-[#0F7A5A] leading-tight">
-              {(ind?.vencidos ?? 0) + (ind?.pendentes ?? 0) === 0
-                ? 'Documentação em dia'
-                : 'Mantenha os documentos em dia'}
-            </p>
-            <p className="text-[11px] text-[#0F7A5A]/80 leading-snug mt-0.5">
-              {(ind?.vencidos ?? 0) + (ind?.pendentes ?? 0) === 0
-                ? 'Nenhuma pendência para esta função.'
-                : 'Evite bloqueios e mantenha a conformidade.'}
-            </p>
-          </div>
-        </div>
-      </section>
-
       {/* ── C. Documentos obrigatórios ── */}
       {!semExigencias && (
-        <section className="rounded-2xl border border-[#E1D9FB] bg-[#F7F4FE] overflow-hidden">
-          <div className="px-5 py-4 flex flex-wrap items-center justify-between gap-3 border-b border-[#E1D9FB]">
+        <section className="rounded-2xl border border-[#E4E9ED] bg-white overflow-hidden shadow-[0_1px_2px_rgba(23,33,43,0.04)]">
+          <div className="px-5 py-4 flex flex-wrap items-center justify-between gap-3 bg-[#F7F4FE] border-b border-[#E1D9FB]">
             <div className="flex items-center gap-3 min-w-0">
               <div className="w-9 h-9 rounded-xl bg-white border border-[#E1D9FB] flex items-center justify-center shrink-0">
                 <ListChecks className="w-4.5 h-4.5 text-[#7C3AED]" />
@@ -458,41 +489,30 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
                   </span>
                 </div>
                 <p className="text-[11px] text-[#687582] mt-0.5">
-                  Exigidos para a função <strong className="text-[#17212B]">{colaborador.funcao}</strong>. Clique em um item para anexar.
+                  Clique em um item para anexar o documento correspondente.
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              {checklist.length > 9 && (
-                <button
-                  onClick={() => setVerTodosObrigatorios(v => !v)}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-white border border-[#DDE3E8] hover:border-[#7C3AED] text-[#17212B] text-xs font-semibold rounded-xl transition-colors cursor-pointer"
-                >
-                  <List className="w-3.5 h-3.5" />
-                  {verTodosObrigatorios ? 'Mostrar menos' : 'Ver lista completa'}
-                </button>
-              )}
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => setShowListaCompleta(true)}
+                className="flex items-center gap-1.5 px-4 py-2.5 bg-white border border-[#DDE3E8] hover:border-[#7C3AED] text-[#4C1D95] text-xs font-semibold rounded-xl transition-colors cursor-pointer"
+              >
+                <List className="w-4 h-4" /> Ver lista completa
+              </button>
               {perm.criar && (
-                <>
-                  <button
-                    onClick={() => setShowLote(true)}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-white border border-[#DDE3E8] hover:border-[#7C3AED] text-[#17212B] text-xs font-semibold rounded-xl transition-colors cursor-pointer"
-                  >
-                    <Layers className="w-3.5 h-3.5" /> Anexar em lote
-                  </button>
-                  <button
-                    onClick={() => abrirUpload()}
-                    className="flex items-center gap-1.5 px-3.5 py-2 bg-[#7C3AED] hover:bg-[#6D28D9] text-white text-xs font-semibold rounded-xl transition-colors cursor-pointer"
-                  >
-                    <Upload className="w-3.5 h-3.5" /> Anexar documento
-                  </button>
-                </>
+                <button
+                  onClick={() => setShowLote(true)}
+                  className="flex items-center gap-1.5 px-4 py-2.5 bg-[#5B21E6] hover:bg-[#4C1BC4] text-white text-xs font-semibold rounded-xl transition-colors cursor-pointer shadow-[0_2px_6px_rgba(91,33,230,0.25)]"
+                >
+                  <Upload className="w-4 h-4" /> Anexar em lote
+                </button>
               )}
             </div>
           </div>
 
-          <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-9 gap-3">
+          <div className="p-4 grid grid-cols-[repeat(auto-fill,minmax(94px,1fr))] gap-3">
             {isLoading
               ? Array.from({ length: 6 }).map((_, i) => (
                   <div key={i} className="h-[132px] rounded-xl bg-white/70 border border-[#E1D9FB] doc-pulso" />
@@ -512,12 +532,12 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
                         liberado ? 'hover:border-[#7C3AED] cursor-pointer' : 'cursor-default'
                       }`}
                     >
-                      <Icone className="w-6 h-6 text-[#7C3AED]" strokeWidth={1.6} />
-                      <span className="text-[11px] font-bold text-[#17212B] leading-tight line-clamp-2 uppercase">
-                        {item.codigo}
+                      <Icone className="w-7 h-7 text-[#5B21E6] mt-1" strokeWidth={1.6} />
+                      <span className="text-[11px] font-bold text-[#17212B] leading-tight line-clamp-2 uppercase min-h-[1.75rem] flex items-center">
+                        {rotuloCurto(item.codigo)}
                       </span>
                       <span
-                        className="px-2 py-0.5 rounded-full text-[10px] font-semibold border w-full truncate"
+                        className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold border max-w-full truncate"
                         style={{ color: e.texto, backgroundColor: e.fundo, borderColor: e.borda }}
                       >
                         {e.rotulo}
@@ -529,8 +549,8 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
                         ) : null
                       ) : null}
                       {liberado && (
-                        <span className="mt-auto flex items-center justify-center gap-1 w-full py-1.5 border border-[#DDE3E8] group-hover:border-[#7C3AED] group-hover:bg-[#F7F4FE] rounded-lg text-[11px] font-semibold text-[#17212B] transition-colors">
-                          {item.documento_id ? <><RefreshCw className="w-3 h-3" />Substituir</> : <><Upload className="w-3 h-3" />Anexar</>}
+                        <span className="mt-auto flex items-center justify-center gap-1.5 w-full py-2 border border-[#DDE3E8] group-hover:border-[#7C3AED] group-hover:bg-[#F7F4FE] rounded-lg text-[11px] font-semibold text-[#17212B] transition-colors">
+                          {item.documento_id ? <><RefreshCw className="w-3.5 h-3.5" />Substituir</> : <><Upload className="w-3.5 h-3.5" />Anexar</>}
                         </span>
                       )}
                     </button>
@@ -576,16 +596,26 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
               {tiposPresentes.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
             <select
-              value={filtroStatus}
-              onChange={e => setFiltroStatus(e.target.value as any)}
-              aria-label="Filtrar por status"
+              value={ordem}
+              onChange={e => setOrdem(e.target.value as any)}
+              aria-label="Ordenar"
               className="px-3 py-2 text-xs border border-[#DDE3E8] rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-[#176B87]/30 cursor-pointer"
             >
-              <option value="todos">Todos os status</option>
-              <option value="valido">Válidos</option>
-              <option value="a_vencer">A vencer</option>
-              <option value="vencido">Vencidos</option>
+              <option value="recentes">Mais recentes</option>
+              <option value="antigos">Mais antigos</option>
+              <option value="vencimento">Vencimento mais próximo</option>
+              <option value="nome">Nome (A–Z)</option>
             </select>
+            {filtroStatus !== 'todos' && (
+              <button
+                onClick={() => setFiltroStatus('todos')}
+                className="flex items-center gap-1 px-2.5 py-2 text-[11px] font-semibold rounded-xl border cursor-pointer"
+                style={{ color: ESTILO_SITUACAO[filtroStatus].texto, backgroundColor: ESTILO_SITUACAO[filtroStatus].fundo, borderColor: ESTILO_SITUACAO[filtroStatus].borda }}
+                title="Limpar filtro"
+              >
+                {ESTILO_SITUACAO[filtroStatus].rotulo} <X className="w-3 h-3" />
+              </button>
+            )}
             <div className="flex border border-[#DDE3E8] rounded-xl overflow-hidden">
               <button
                 onClick={() => setModoLista(false)}
@@ -618,15 +648,15 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
             </h3>
             <p className="text-xs text-[#687582] mt-1">
               {anexados.length === 0
-                ? 'Selecione um documento obrigatório acima ou use o botão abaixo.'
+                ? 'Clique no botão abaixo ou selecione um documento acima para começar.'
                 : 'Ajuste a busca ou os filtros para ver outros documentos.'}
             </p>
             {anexados.length === 0 && perm.criar && (
               <button
                 onClick={() => abrirUpload()}
-                className="mt-4 inline-flex items-center gap-2 px-4 py-2.5 bg-[#176B87] hover:bg-[#135a73] text-white text-xs font-semibold rounded-xl transition-colors cursor-pointer"
+                className="mt-5 inline-flex items-center gap-2 px-6 py-3 bg-[#176B87] hover:bg-[#135a73] text-white text-sm font-semibold rounded-xl transition-colors cursor-pointer"
               >
-                <Upload className="w-4 h-4" /> Anexar documento
+                <Upload className="w-4 h-4" /> Anexar Documento
               </button>
             )}
           </div>
@@ -781,6 +811,16 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
         />
       )}
 
+      {showListaCompleta && (
+        <ListaCompletaModal
+          checklist={checklist}
+          funcao={colaborador.funcao}
+          podeAgir={podeAgirNoItem}
+          onAnexar={item => { setShowListaCompleta(false); abrirUpload(item); }}
+          onClose={() => setShowListaCompleta(false)}
+        />
+      )}
+
       {preview && <PreviewModal url={preview.url} nome={preview.nome} onClose={() => setPreview(null)} />}
     </div>
   );
@@ -886,6 +926,72 @@ function ExcluirDocumentoModal({
             {ocupado ? 'Excluindo...' : 'Excluir'}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** Checklist completo em tabela: documento, situação, validade e ação. */
+function ListaCompletaModal({
+  checklist,
+  funcao,
+  podeAgir,
+  onAnexar,
+  onClose,
+}: {
+  checklist: ChecklistItem[];
+  funcao: string;
+  podeAgir: (item: ChecklistItem) => boolean;
+  onAnexar: (item: ChecklistItem) => void;
+  onClose: () => void;
+}) {
+  const ok = checklist.filter(i => i.situacao !== 'pendente' && i.situacao !== 'vencido').length;
+  return (
+    <div className="fixed inset-0 z-50 bg-[#0B1620]/60 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="doc-entrada bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-[#E4E9ED]">
+          <div>
+            <h2 className="text-sm font-bold text-[#17212B]">Checklist de documentos</h2>
+            <p className="text-[11px] text-[#687582] mt-0.5">
+              {ok} de {checklist.length} em dia · básicos de todos os colaboradores + exigidos para {funcao}
+            </p>
+          </div>
+          <button onClick={onClose} aria-label="Fechar" className="p-1.5 text-[#687582] hover:bg-[#F4F6F8] rounded-lg cursor-pointer">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <ul className="overflow-y-auto divide-y divide-[#EEF1F4]">
+          {checklist.map(item => {
+            const Icone = iconeDoTipo(item.codigo);
+            const e = ESTILO_SITUACAO[item.situacao];
+            const liberado = podeAgir(item);
+            return (
+              <li key={item.tipo_id} className="flex items-center gap-3 px-5 py-3">
+                <Icone className="w-5 h-5 text-[#5B21E6] shrink-0" strokeWidth={1.7} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-[#17212B] truncate">{item.nome}</p>
+                  <p className="text-[10px] text-[#687582]">
+                    {item.data_vencimento ? `Vence em ${formatDateBR(item.data_vencimento)}` : item.tem_validade ? 'Com validade' : 'Sem validade'}
+                  </p>
+                </div>
+                <span
+                  className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold border shrink-0"
+                  style={{ color: e.texto, backgroundColor: e.fundo, borderColor: e.borda }}
+                >
+                  {e.rotulo}
+                </span>
+                {liberado && (
+                  <button
+                    onClick={() => onAnexar(item)}
+                    className="flex items-center gap-1 px-2.5 py-1.5 border border-[#DDE3E8] hover:border-[#7C3AED] rounded-lg text-[11px] font-semibold text-[#17212B] cursor-pointer shrink-0"
+                  >
+                    {item.documento_id ? <><RefreshCw className="w-3 h-3" />Substituir</> : <><Upload className="w-3 h-3" />Anexar</>}
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
       </div>
     </div>
   );

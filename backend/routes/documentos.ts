@@ -104,7 +104,10 @@ async function exigenciasDaFuncao(sb: SupabaseClient, empresa_id: string, funcao
   // Tipo desativado sai da conta de pendências automaticamente (filtro status=ativo acima)
   return {
     todosOsTipos: tipos || [],
-    tiposExigidos: (tipos || []).filter(t => exigidos.has(t.id)),
+    // Obrigatórios = básicos de TODOS os colaboradores + os exigidos pela função
+    tiposExigidos: (tipos || [])
+      .filter(t => t.todos_colaboradores === true || exigidos.has(t.id))
+      .sort((a, b) => (a.ordem ?? 999) - (b.ordem ?? 999) || String(a.nome).localeCompare(String(b.nome))),
   };
 }
 
@@ -235,6 +238,7 @@ router.get('/checklist/:colaboradorId', async (req: Request, res: Response) => {
           tem_validade: t.tem_validade,
           validade_meses: t.validade_meses,
           dias_alerta: t.dias_alerta,
+          todos_colaboradores: t.todos_colaboradores === true,
         })),
         indicadores: {
           total: anexados.length,

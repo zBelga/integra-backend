@@ -48,6 +48,22 @@ export function iconeDoTipo(codigo: string): LucideIcon {
   return ICONES[chave] || ICONES[String(codigo || '').toUpperCase()] || FileText;
 }
 
+/** Rótulo curto para os cards do checklist (ex.: COMP_RESID → COMP. RESID). */
+const ROTULOS_CURTOS: Record<string, string> = {
+  NR06: 'NR-06',
+  NR10: 'NR-10',
+  NR18: 'NR-18',
+  NR35: 'NR-35',
+  INTEGRACAO: 'INTEGRAÇÃO',
+  FICHA: 'FICHA REG',
+  COMPRESID: 'COMP. RESID',
+};
+
+export function rotuloCurto(codigo: string): string {
+  const chave = String(codigo || '').toUpperCase().replace(/[\s._-]/g, '');
+  return ROTULOS_CURTOS[chave] || String(codigo || '').toUpperCase().replace(/_/g, ' ');
+}
+
 export interface EstiloSituacao {
   rotulo: string;
   texto: string;

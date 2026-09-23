@@ -251,13 +251,13 @@ export const DocumentosPorFuncaoView: React.FC = () => {
               <div>
                 <h2 className="text-sm font-bold text-[#17212B]">{nomeFuncaoAtiva || 'Selecione uma função'}</h2>
                 <p className="text-[11px] text-[#687582] mt-0.5">
-                  {selecionados.size} de {tipos.length} documentos marcados ·{' '}
+                  {tipos.filter(t => t.todos_colaboradores).length} básicos (todos) + {selecionados.size} específicos desta função ·{' '}
                   {colaboradoresAfetados} {colaboradoresAfetados === 1 ? 'colaborador' : 'colaboradores'} nesta função
                 </p>
               </div>
               <div className="flex gap-1.5">
                 <button
-                  onClick={() => setSelecionados(new Set(tipos.map(t => t.id)))}
+                  onClick={() => setSelecionados(new Set(tipos.filter(t => !t.todos_colaboradores).map(t => t.id)))}
                   className="px-3 py-1.5 text-[11px] font-semibold rounded-lg border border-[#DDE3E8] text-[#687582] hover:border-[#7C3AED] hover:text-[#7C3AED] transition-colors cursor-pointer"
                 >
                   Marcar todos
@@ -283,6 +283,23 @@ export const DocumentosPorFuncaoView: React.FC = () => {
               <div className="p-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5">
                 {tipos.map(t => {
                   const Icone = iconeDoTipo(t.codigo);
+                  // Básico de todos os colaboradores: sempre exigido, não se desmarca aqui
+                  if (t.todos_colaboradores) {
+                    return (
+                      <div
+                        key={t.id}
+                        title="Obrigatório para todos os colaboradores. Altere em Tipos de Documentos."
+                        className="flex items-start gap-3 p-3 rounded-xl border border-[#E1D9FB] bg-[#FBFAFF]"
+                      >
+                        <input type="checkbox" checked readOnly disabled className="mt-0.5 w-4 h-4 accent-[#7C3AED] shrink-0" />
+                        <Icone className="w-5 h-5 shrink-0 mt-px text-[#7C3AED]" strokeWidth={1.7} />
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-[#17212B] truncate">{t.nome}</p>
+                          <p className="text-[10px] text-[#6D28D9] font-semibold mt-0.5">Todos os colaboradores</p>
+                        </div>
+                      </div>
+                    );
+                  }
                   const marcado = selecionados.has(t.id);
                   return (
                     <label

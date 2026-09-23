@@ -267,6 +267,8 @@ export interface DocumentoTipo {
   status: 'ativo' | 'inativo';
   padrao: boolean;
   ordem: number;
+  /** Obrigatório para todos os colaboradores, independente da função */
+  todos_colaboradores?: boolean;
   created_at?: string;
   updated_at?: string;
 }
@@ -279,6 +281,7 @@ export interface DocumentoTipoFormData {
   validade_meses?: number | null;
   dias_alerta: number;
   status: 'ativo' | 'inativo';
+  todos_colaboradores?: boolean;
 }
 
 /** Situação de um item do checklist do colaborador */

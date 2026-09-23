@@ -314,7 +314,8 @@ router.post('/', async (req: Request, res: Response) => {
         dias_alerta: Number(req.body.dias_alerta) > 0 ? Number(req.body.dias_alerta) : 30,
         status: req.body.status === 'inativo' ? 'inativo' : 'ativo',
         padrao: false,
-        ordem: 100,
+        ordem: 200,
+        todos_colaboradores: req.body.todos_colaboradores === true || req.body.todos_colaboradores === 'true',
       })
       .select()
       .single();
@@ -390,6 +391,9 @@ router.put('/:id', async (req: Request, res: Response) => {
       updated_at: new Date().toISOString(),
     };
     if (req.body.status === 'ativo' || req.body.status === 'inativo') patch.status = req.body.status;
+    if (req.body.todos_colaboradores !== undefined) {
+      patch.todos_colaboradores = req.body.todos_colaboradores === true || req.body.todos_colaboradores === 'true';
+    }
 
     const { data, error } = await sb
       .from('documento_tipos')
