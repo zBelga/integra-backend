@@ -21,6 +21,8 @@ interface EmpresaSelectionProps {
   onCreateEmpresa: (empresa: Omit<Empresa, 'id' | 'obrasCount' | 'colaboradoresCount'>) => void;
   onUpdateEmpresa?: (empresa: Omit<Empresa, 'id' | 'obrasCount' | 'colaboradoresCount'>, id?: string) => void;
   onDeleteEmpresa?: (id: string) => void;
+  /** Só o administrador geral cadastra, edita ou exclui empresa */
+  podeGerenciar?: boolean;
 }
 
 export const EmpresaSelection: React.FC<EmpresaSelectionProps> = ({
@@ -30,6 +32,7 @@ export const EmpresaSelection: React.FC<EmpresaSelectionProps> = ({
   onCreateEmpresa,
   onUpdateEmpresa,
   onDeleteEmpresa,
+  podeGerenciar = false,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -87,6 +90,7 @@ export const EmpresaSelection: React.FC<EmpresaSelectionProps> = ({
           </div>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            {podeGerenciar && (
             <button
               onClick={handleOpenCreateModal}
               className="px-4 py-2.5 bg-[#176B87] hover:bg-[#0F536A] text-white rounded-xl text-xs font-semibold flex items-center justify-center space-x-2 shadow-xs transition-all hover:shadow cursor-pointer"
@@ -94,6 +98,7 @@ export const EmpresaSelection: React.FC<EmpresaSelectionProps> = ({
               <Plus className="w-4 h-4" />
               <span>Cadastrar Nova Empresa</span>
             </button>
+            )}
           </div>
         </div>
 
@@ -178,7 +183,8 @@ export const EmpresaSelection: React.FC<EmpresaSelectionProps> = ({
                         <span>{emp.status}</span>
                       </span>
 
-                      {/* Edit Company (Image & Color) Button */}
+                      {/* Edit Company (Image & Color) Button — só master */}
+                      {podeGerenciar && (<>
                       <button
                         type="button"
                         onClick={(e) => handleOpenEditModal(e, emp)}
@@ -196,6 +202,7 @@ export const EmpresaSelection: React.FC<EmpresaSelectionProps> = ({
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
+                      </>)}
                     </div>
                   </div>
 
@@ -268,13 +275,13 @@ export const EmpresaSelection: React.FC<EmpresaSelectionProps> = ({
             <p className="text-xs text-[#687582] max-w-sm mx-auto">
               Não encontramos nenhuma empresa com o termo "{searchTerm}". Tente outra busca ou cadastre uma nova organização.
             </p>
-            <button
+            {podeGerenciar && (<button
               onClick={handleOpenCreateModal}
               className="mt-2 px-4 py-2 bg-[#176B87] text-white rounded-xl text-xs font-semibold hover:bg-[#0F536A] transition-colors inline-flex items-center space-x-1.5 cursor-pointer shadow-xs"
             >
               <Plus className="w-4 h-4" />
               <span>Cadastrar Nova Empresa</span>
-            </button>
+            </button>)}
           </div>
         )}
       </div>

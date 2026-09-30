@@ -2,9 +2,89 @@ import { Router, Request, Response } from 'express';
 import { queryRows, executeQuery } from '../db.js';
 import { cleanCPF, isValidCPF } from '../utils/cpf.js';
 
+import { exigir } from '../utils/permissoes.js';
+
 const router = Router();
 
 // GET /api/admissoes - List admissions with pagination, search & filters
+/** Data de hoje no fuso de Brasília, no formato AAAA-MM-DD. */
+function hojeBR(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+}
+
+/** empresa do pedido: o token manda; a query só vale para o master. */
+function empresaDoPedido(req: Request): string {
+  const doToken = req.user?.empresa_id;
+  const daQuery = String(req.query.empresa_id || '');
+  if (req.user?.perfil === 'master_admin' && daQuery) return daQuery;
+  return doToken || daQuery || 'emp-001';
+}
+
+/**
+ * GET /api/admissoes/contratados/resumo
+ * Quantos foram contratados em cada dia — alimenta as abas "Contratados 29/09".
+ * Lê do efetivo: mesmo depois de virar colaborador, o dia da contratação fica.
+ */
+router.get('/contratados/resumo', async (req: Request, res: Response) => {
+  try {
+    const empresa_id = empresaDoPedido(req);
+    let linhas: any[] = [];
+    try {
+      linhas = (await queryRows(
+      `SELECT contratado_em AS data, COUNT(*) AS total
+         FROM colaboradores
+        WHERE empresa_id = ? AND contratado_em IS NOT NULL AND contratado_em <> ''
+        GROUP BY contratado_em`,
+      [empresa_id]
+      )) as any[];
+    } catch {
+      // Banco ainda sem a coluna contratado_em: nenhuma aba de dia, e só
+      return res.json({ success: true, data: [] });
+    }
+
+    const data = linhas
+      .map(l => ({ data: String(l.data).slice(0, 10), total: Number(l.total) || 0 }))
+      .sort((a, b) => b.data.localeCompare(a.data));
+
+    res.json({ success: true, data });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * GET /api/admissoes/contratados?data=AAAA-MM-DD
+ * Quem foi contratado naquele dia. Só leitura — os dados vivem no efetivo.
+ */
+router.get('/contratados', async (req: Request, res: Response) => {
+  try {
+    const empresa_id = empresaDoPedido(req);
+    const dia = String(req.query.data || '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dia)) {
+      return res.status(400).json({ success: false, error: 'Informe a data no formato AAAA-MM-DD.' });
+    }
+
+    let data: any[] = [];
+    try {
+      data = (await queryRows(
+      `SELECT c.id, c.nome, c.funcao, c.cpf, c.rg, c.numero_chapa, c.data_admissao, c.data_aso,
+              c.contratado_em, c.obra_id, o.nome AS obra_nome, o.codigo AS obra_codigo
+         FROM colaboradores c
+         LEFT JOIN obras o ON c.obra_id = o.id
+        WHERE c.empresa_id = ? AND c.contratado_em = ?
+        ORDER BY c.nome`,
+      [empresa_id, dia]
+      )) as any[];
+    } catch {
+      return res.json({ success: true, data: [] });
+    }
+
+    res.json({ success: true, data });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 router.get('/', async (req: Request, res: Response) => {
   try {
     const rawPage = parseInt(req.query.page as string, 10) || 1;
@@ -164,7 +244,7 @@ async function verifyCargoPermission(req: Request, acao: 'visualizar' | 'criar' 
 }
 
 // POST /api/admissoes - Create new admission
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', exigir('admissoes', 'criar'), async (req: Request, res: Response) => {
   try {
     const permCheck = await verifyCargoPermission(req, 'criar');
     if (!permCheck.allowed) {
@@ -261,7 +341,7 @@ router.post('/', async (req: Request, res: Response) => {
 });
 
 // PUT /api/admissoes/:id - Update existing admission
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', exigir('admissoes', 'editar'), async (req: Request, res: Response) => {
   try {
     const permCheck = await verifyCargoPermission(req, 'editar');
     if (!permCheck.allowed) {
@@ -361,7 +441,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 });
 
 // DELETE /api/admissoes/:id - Delete admission
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', exigir('admissoes', 'excluir'), async (req: Request, res: Response) => {
   try {
     const permCheck = await verifyCargoPermission(req, 'excluir');
     if (!permCheck.allowed) {
@@ -382,7 +462,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 });
 
 // POST /api/admissoes/:id/contratar - Promote admission to efetivo
-router.post('/:id/contratar', async (req: Request, res: Response) => {
+router.post('/:id/contratar', exigir('admissoes', 'editar'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { rg = '', numero_chapa = '', data_admissao } = req.body;
@@ -418,10 +498,7 @@ router.post('/:id/contratar', async (req: Request, res: Response) => {
     const colaboradorId = `col-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const admissaoDate = data_admissao || adm.previsao_contratacao || new Date().toISOString().split('T')[0];
 
-    await executeQuery(
-      `INSERT INTO colaboradores (id, empresa_id, nome, funcao, cpf, rg, numero_chapa, obra_id, data_admissao, data_aso, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-      [
+    const dadosColaborador = [
         colaboradorId,
         empresaId,
         adm.nome,
@@ -432,8 +509,22 @@ router.post('/:id/contratar', async (req: Request, res: Response) => {
         adm.obra_id,
         admissaoDate,
         adm.data_aso || '',
-      ]
-    );
+    ];
+
+    try {
+      await executeQuery(
+        `INSERT INTO colaboradores (id, empresa_id, nome, funcao, cpf, rg, numero_chapa, obra_id, data_admissao, data_aso, contratado_em, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+        [...dadosColaborador, hojeBR()] // hojeBR = dia do clique em contratar
+      );
+    } catch {
+      // Banco antigo, ainda sem a coluna: contrata do mesmo jeito
+      await executeQuery(
+        `INSERT INTO colaboradores (id, empresa_id, nome, funcao, cpf, rg, numero_chapa, obra_id, data_admissao, data_aso, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+        dadosColaborador
+      );
+    }
 
     // Remove from admissoes
     await executeQuery('DELETE FROM admissoes WHERE id = ?', [id]);

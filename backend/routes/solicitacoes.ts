@@ -1,17 +1,19 @@
 import { Router, Request, Response } from 'express';
 import { queryRows, executeQuery, saveDbToDisk } from '../db.js';
+import { pode, ehMaster, Modulo, Acao } from '../utils/permissoes.js';
 
 const router = Router();
 
-// Helper to check user permission
-async function checkCargoPermission(cargoId: string, modulo: string, acao: string): Promise<boolean> {
-  if (!cargoId) return false;
-  const rows = await queryRows(
-    'SELECT * FROM cargos_permissoes WHERE cargo_id = ? AND modulo = ?',
-    [cargoId, modulo]
-  );
-  if (rows.length === 0) return false;
-  return Boolean(rows[0][acao]);
+/**
+ * Permissão do usuário LOGADO no módulo da solicitação. O cargo vem do token,
+ * nunca do corpo do pedido — antes dava para mandar o cargo de outra pessoa.
+ * Módulo desconhecido cai em 'admissoes', que é o fluxo padrão de aprovação.
+ */
+async function podeNoModuloDaSolicitacao(req: Request, modulo: string, acao: Acao): Promise<boolean> {
+  if (ehMaster(req)) return true;
+  const conhecidos = ['admissoes', 'efetivo', 'obras', 'documentos', 'rh', 'relatorios', 'usuarios'];
+  const alvo = (conhecidos.includes(String(modulo)) ? String(modulo) : 'admissoes') as Modulo;
+  return pode(req, alvo, acao);
 }
 
 // GET /api/solicitacoes/stats/counts - Get badge counts
@@ -211,9 +213,9 @@ router.post('/', async (req: Request, res: Response) => {
       });
     }
 
-    // Check if user's cargo has permission to submit requests for this module
-    if (solicitante_cargo_id) {
-      const canRequest = await checkCargoPermission(solicitante_cargo_id, modulo, 'solicitar');
+    // Permissão de solicitar, pelo cargo do usuário logado
+    {
+      const canRequest = await podeNoModuloDaSolicitacao(req, modulo, 'solicitar');
       if (!canRequest) {
         return res.status(403).json({
           success: false,
@@ -333,8 +335,8 @@ router.post('/:id/aprovar', async (req: Request, res: Response) => {
     }
 
     // Check approver permission for the module
-    if (aprovador_cargo_id) {
-      const canApprove = await checkCargoPermission(aprovador_cargo_id, sol.modulo, 'aprovar');
+    {
+      const canApprove = await podeNoModuloDaSolicitacao(req, sol.modulo, 'aprovar');
       if (!canApprove) {
         return res.status(403).json({
           success: false,
@@ -486,8 +488,8 @@ router.post('/:id/recusar', async (req: Request, res: Response) => {
     }
 
     // Check approver permission
-    if (aprovador_cargo_id) {
-      const canApprove = await checkCargoPermission(aprovador_cargo_id, sol.modulo, 'aprovar');
+    {
+      const canApprove = await podeNoModuloDaSolicitacao(req, sol.modulo, 'aprovar');
       if (!canApprove) {
         return res.status(403).json({
           success: false,

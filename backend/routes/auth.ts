@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { queryRows } from '../db.js';
 import { generateToken } from '../middleware/auth.js';
 
+import { requireAuth } from '../middleware/auth.js';
 const router = Router();
 
 /**
@@ -81,6 +82,30 @@ router.post('/login', async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/auth/permissoes
+ * Matriz de permissões do usuário logado (módulo × ação) + se é master.
+ * A tela usa isto para esconder o que o cargo não pode fazer — o servidor
+ * continua validando tudo de novo em cada rota.
+ */
+router.get('/permissoes', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { permissoesDoUsuario, ehMaster } = await import('../utils/permissoes.js');
+    const permissoes = await permissoesDoUsuario(req);
+    res.json({
+      success: true,
+      data: {
+        master: ehMaster(req),
+        perfil: req.user?.perfil || '',
+        empresa_id: req.user?.empresa_id || '',
+        modulos: permissoes,
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
  * POST /api/auth/logout
  * JWT é stateless — o cliente descarta o token.
  */
@@ -92,7 +117,6 @@ router.post('/logout', (_req: Request, res: Response) => {
  * GET /api/auth/me
  * Retorna os dados do usuário autenticado (requer token).
  */
-import { requireAuth } from '../middleware/auth.js';
 
 router.get('/me', requireAuth, async (req: Request, res: Response) => {
   try {

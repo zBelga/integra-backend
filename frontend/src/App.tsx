@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { ActiveView, Empresa, UsuarioSessao } from './types';
+import { ActiveView, Empresa, PermissoesUsuario, UsuarioSessao } from './types';
 import { Header } from './components/layout/Header';
 import { LeftSidebar } from './components/layout/LeftSidebar';
 import { Dashboard } from './components/dashboard/Dashboard';
@@ -14,7 +14,7 @@ import { DocumentosView } from './components/documentos/DocumentosView';
 import { TiposDocumentoView } from './components/documentos/TiposDocumentoView';
 import { DocumentosPorFuncaoView } from './components/documentos/DocumentosPorFuncaoView';
 import { Toast, ToastMessage } from './components/ui/Toast';
-import { fetchEmpresas, createEmpresa, updateEmpresa, deleteEmpresa } from './services/api';
+import { fetchEmpresas, createEmpresa, updateEmpresa, deleteEmpresa, fetchPermissoesUsuario } from './services/api';
 
 /** Placeholder para telas que ainda não existem */
 const EmBreve: React.FC<{ titulo: string; onVoltar: () => void }> = ({ titulo, onVoltar }) => (
@@ -45,6 +45,7 @@ export default function App() {
     name: 'Fabrício Oliveira',
     role: 'Administrador Geral',
   });
+  const [permissoes, setPermissoes] = useState<PermissoesUsuario | null>(null);
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [selectedEmpresa, setSelectedEmpresa] = useState<Empresa | null>(null);
   const [currentView, setCurrentView] = useState<ActiveView>('empresas');
@@ -61,9 +62,22 @@ export default function App() {
     }
   }, []);
 
+  /** Permissões do cargo — sem elas, a tela assume o mínimo (só visualizar). */
+  const loadPermissoes = useCallback(async () => {
+    try {
+      const res = await fetchPermissoesUsuario();
+      if (res.success) setPermissoes(res.data);
+    } catch {
+      setPermissoes(null);
+    }
+  }, []);
+
   useEffect(() => {
-    if (isAuthenticated) loadEmpresas();
-  }, [isAuthenticated, loadEmpresas]);
+    if (isAuthenticated) {
+      loadEmpresas();
+      loadPermissoes();
+    }
+  }, [isAuthenticated, loadEmpresas, loadPermissoes]);
 
   const handleLoginSuccess = (credentials: UsuarioSessao) => {
     setCurrentUser(credentials);
@@ -173,6 +187,7 @@ export default function App() {
           onCloseMobile={() => setIsMobileSidebarOpen(false)}
           selectedEmpresa={selectedEmpresa}
           currentUser={currentUser}
+          permissoes={permissoes}
           onLogout={handleLogout}
         />
       )}
@@ -206,6 +221,7 @@ export default function App() {
               onCreateEmpresa={handleCreateEmpresa}
               onUpdateEmpresa={handleUpdateEmpresa}
               onDeleteEmpresa={handleDeleteEmpresa}
+              podeGerenciar={!!permissoes?.master}
             />
           )}
           {currentView === 'dashboard' && (
@@ -214,10 +230,11 @@ export default function App() {
               selectedEmpresa={selectedEmpresa}
               onSwitchEmpresa={handleSwitchEmpresa}
               currentUser={currentUser}
+              permissoes={permissoes}
             />
           )}
           {currentView === 'administrativo' && (
-            <AdministrativoView onShowToast={setToast} selectedEmpresa={selectedEmpresa} />
+            <AdministrativoView onShowToast={setToast} selectedEmpresa={selectedEmpresa} permissoes={permissoes} />
           )}
           {(currentView === 'efetivo-obra' || currentView === 'seguranca' || currentView === 'almoxarifado') && (
             <EmBreve

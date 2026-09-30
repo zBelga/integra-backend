@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { queryRows, executeQuery } from '../db.js';
 
+import { somenteMaster } from '../utils/permissoes.js';
 const router = Router();
 
 const MASTER_EMAIL = 'fabriciooliveira2431@gmail.com';
@@ -99,7 +100,7 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // POST /api/usuarios - Create new user with company linkage
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', somenteMaster, async (req: Request, res: Response) => {
   try {
     const {
       nome,
@@ -127,6 +128,14 @@ router.post('/', async (req: Request, res: Response) => {
 
     if (!empresa_id) {
       return res.status(400).json({ success: false, error: 'Selecione uma empresa para vincular o usuário' });
+    }
+
+    // O cargo é o que define o acesso: sem ele o usuário não entra
+    if (!cargo_id) {
+      return res.status(400).json({
+        success: false,
+        error: 'Selecione o cargo do usuário. É o cargo que define o que ele pode fazer no sistema.',
+      });
     }
 
     // Resolve cargo and cargo_id with company isolation
@@ -224,7 +233,7 @@ router.post('/', async (req: Request, res: Response) => {
 });
 
 // PUT /api/usuarios/:id - Update existing user
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', somenteMaster, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const {
@@ -341,7 +350,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 });
 
 // PATCH /api/usuarios/:id/status - Toggle status
-router.patch('/:id/status', async (req: Request, res: Response) => {
+router.patch('/:id/status', somenteMaster, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
@@ -370,7 +379,7 @@ router.patch('/:id/status', async (req: Request, res: Response) => {
 });
 
 // DELETE /api/usuarios/:id - Delete user
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', somenteMaster, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 

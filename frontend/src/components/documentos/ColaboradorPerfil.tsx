@@ -42,8 +42,22 @@ import {
 import { UploadDocumentoModal } from './UploadDocumentoModal';
 import { AnexarLoteModal } from './AnexarLoteModal';
 import { HistoricoDocumentosPanel } from './HistoricoDocumentosPanel';
-import { fetchChecklistColaborador, downloadDocumento, deleteDocumento } from '../../services/api';
-import type { Colaborador, Documento, ChecklistColaborador, ChecklistItem, SituacaoDocumento, PermissoesDocumentos } from '../../types';
+import {
+  fetchChecklistColaborador,
+  downloadDocumento,
+  deleteDocumento,
+  fetchFuncoesEmpresa,
+  definirFuncaoDocumentos,
+} from '../../services/api';
+import type {
+  Colaborador,
+  Documento,
+  ChecklistColaborador,
+  ChecklistItem,
+  SituacaoDocumento,
+  PermissoesDocumentos,
+  FuncaoEmpresa,
+} from '../../types';
 import {
   iconeDoTipo,
   ESTILO_SITUACAO,
@@ -123,7 +137,17 @@ const CardIndicador = React.memo(({ icone, rotulo, valor, cor, fundo, ativo, onC
 CardIndicador.displayName = 'CardIndicador';
 
 /** Visualização inline (PDF/imagem) usando a URL assinada temporária. */
-function PreviewModal({ url, nome, onClose }: { url: string; nome: string; onClose: () => void }) {
+function PreviewModal({
+  url,
+  nome,
+  onBaixar,
+  onClose,
+}: {
+  url: string;
+  nome: string;
+  onBaixar?: () => void;
+  onClose: () => void;
+}) {
   const isImagem = /\.(jpe?g|png|webp|gif)$/i.test(nome);
   return (
     <div className="fixed inset-0 z-[60] bg-[#0B1620]/80 flex items-center justify-center p-4" onClick={onClose}>
@@ -137,15 +161,12 @@ function PreviewModal({ url, nome, onClose }: { url: string; nome: string; onClo
             <h3 className="text-sm font-bold text-[#17212B] truncate">{nome}</h3>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <a
-              href={url}
-              download={nome}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#176B87] hover:bg-[#135a73] text-white text-xs font-semibold rounded-lg transition-colors"
+            <button
+              onClick={onBaixar}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#176B87] hover:bg-[#135a73] text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
             >
               <Download className="w-3.5 h-3.5" /> Baixar
-            </a>
+            </button>
             <button
               onClick={onClose}
               aria-label="Fechar"
@@ -190,9 +211,11 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
   const [ordem, setOrdem] = useState<'recentes' | 'antigos' | 'vencimento' | 'nome'>('recentes');
   const [verTodosObrigatorios, setVerTodosObrigatorios] = useState(false);
   const [showListaCompleta, setShowListaCompleta] = useState(false);
+  const [funcoes, setFuncoes] = useState<FuncaoEmpresa[]>([]);
+  const [trocandoFuncao, setTrocandoFuncao] = useState(false);
 
   const [ocupadoId, setOcupadoId] = useState<string | null>(null);
-  const [preview, setPreview] = useState<{ url: string; nome: string } | null>(null);
+  const [preview, setPreview] = useState<{ url: string; nome: string; doc: Documento } | null>(null);
 
   const [substituindo, setSubstituindo] = useState<{ id: string; nome: string } | undefined>();
   const [showLote, setShowLote] = useState(false);
@@ -216,6 +239,25 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
   }, [colaborador.id]);
 
   useEffect(() => { carregar(); }, [carregar]);
+
+  // Lista de funções (do sistema + as criadas só para documentos)
+  useEffect(() => {
+    fetchFuncoesEmpresa().then(r => setFuncoes(r.data || [])).catch(() => {});
+  }, []);
+
+  /** Troca a função de documentos do colaborador (não mexe no cargo dele). */
+  const trocarFuncaoDocumentos = async (chave: string) => {
+    setTrocandoFuncao(true);
+    setError('');
+    try {
+      await definirFuncaoDocumentos(colaborador.id, chave);
+      await carregar();
+    } catch (err: any) {
+      setError(err.message || 'Não foi possível trocar a função de documentos.');
+    } finally {
+      setTrocandoFuncao(false);
+    }
+  };
 
   const ind = dados?.indicadores;
   const checklist = dados?.checklist || [];
@@ -313,14 +355,13 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
   const comArquivo = async (doc: Documento, acao: 'ver' | 'baixar') => {
     setOcupadoId(doc.id);
     try {
-      const res = await downloadDocumento(doc.id);
+      const res = await downloadDocumento(doc.id, acao === 'baixar');
       if (acao === 'ver') {
-        setPreview({ url: res.url, nome: res.nome_arquivo || doc.nome_arquivo });
+        setPreview({ url: res.url, nome: res.nome_arquivo || doc.nome_arquivo, doc });
       } else {
         const a = document.createElement('a');
         a.href = res.url;
-        a.download = res.nome_arquivo || doc.nome_arquivo;
-        a.target = '_blank';
+        a.download = res.nome_download || res.nome_arquivo || doc.nome_arquivo;
         a.click();
       }
     } catch (err: any) {
@@ -344,6 +385,8 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
   };
 
   const pct = ind?.conformidade ?? 0;
+  const funcaoDoc = dados?.funcao_documentos || colaborador.funcao;
+  const funcaoDocPersonalizada = !!dados?.funcao_documentos_personalizada;
 
   return (
     <div className="p-5 sm:p-6 space-y-4 max-w-[1600px] mx-auto">
@@ -385,6 +428,36 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
                   <span className="flex items-center gap-1.5"><MapPin className="w-4 h-4" />{colaborador.obra_nome}</span>
                 )}
               </div>
+
+              {/* Função que vale para os documentos — pode ser diferente do cargo */}
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="text-[11px] font-semibold text-[#687582]">Função para documentos:</span>
+                {perm.editar ? (
+                  <select
+                    value={funcaoDocPersonalizada ? funcaoDoc : ''}
+                    onChange={e => trocarFuncaoDocumentos(e.target.value)}
+                    disabled={trocandoFuncao}
+                    aria-label="Função para documentos"
+                    className="px-2.5 py-1.5 text-[11px] font-semibold border border-[#DDE3E8] rounded-lg bg-white text-[#17212B] focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/25 cursor-pointer disabled:opacity-50 max-w-[260px]"
+                  >
+                    <option value="">Mesma do cadastro ({colaborador.funcao})</option>
+                    {funcoes.map(f => (
+                      <option key={f.chave} value={f.chave}>
+                        {f.nome}{f.personalizada ? ' (documentos)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <span className="px-2.5 py-1 text-[11px] font-semibold bg-[#F4F6F8] border border-[#E4E9ED] rounded-lg text-[#17212B]">
+                    {funcaoDoc || colaborador.funcao}
+                  </span>
+                )}
+                {funcaoDocPersonalizada && (
+                  <span className="px-2 py-0.5 text-[10px] font-bold bg-[#F1ECFE] text-[#6D28D9] border border-[#E1D9FB] rounded-full">
+                    diferente do cargo
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -395,7 +468,7 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
                 <p className="text-xs font-semibold text-[#17212B]">Nenhum documento obrigatório</p>
                 <p className="text-[11px] text-[#687582] mt-0.5 leading-snug">
                   Marque os documentos básicos em Tipos de Documentos ou os específicos da função{' '}
-                  <strong className="text-[#17212B]">{colaborador.funcao}</strong>.
+                  <strong className="text-[#17212B]">{funcaoDoc}</strong>.
                 </p>
                 {onConfigurarExigencias && (
                   <button
@@ -522,38 +595,98 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
                   const e = ESTILO_SITUACAO[item.situacao];
                   const dias = diasParaVencer(item.data_vencimento);
                   const liberado = podeAgirNoItem(item);
+                  // Documento já entregue → dá para ver, baixar, substituir e excluir aqui mesmo
+                  const anexo = item.documento_id ? anexados.find(d => d.id === item.documento_id) : undefined;
+                  const ocupado = !!anexo && ocupadoId === anexo.id;
                   return (
-                    <button
+                    <div
                       key={item.tipo_id}
-                      onClick={() => liberado && abrirUpload(item)}
-                      disabled={!liberado}
-                      title={liberado ? item.descricao || item.nome : 'Sem permissão para esta ação'}
+                      title={item.descricao || item.nome}
                       className={`doc-card group bg-white rounded-xl border border-[#E4E9ED] p-3 flex flex-col items-center text-center gap-2 ${
-                        liberado ? 'hover:border-[#7C3AED] cursor-pointer' : 'cursor-default'
+                        liberado ? 'hover:border-[#7C3AED]' : ''
                       }`}
                     >
-                      <Icone className="w-7 h-7 text-[#5B21E6] mt-1" strokeWidth={1.6} />
-                      <span className="text-[11px] font-bold text-[#17212B] leading-tight line-clamp-2 uppercase min-h-[1.75rem] flex items-center">
-                        {rotuloCurto(item.codigo)}
-                      </span>
-                      <span
-                        className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold border max-w-full truncate"
-                        style={{ color: e.texto, backgroundColor: e.fundo, borderColor: e.borda }}
+                      <button
+                        type="button"
+                        onClick={() => (anexo ? comArquivo(anexo, 'ver') : liberado && abrirUpload(item))}
+                        disabled={!anexo && !liberado}
+                        title={anexo ? `Visualizar ${item.nome}` : liberado ? `Anexar ${item.nome}` : 'Sem permissão para esta ação'}
+                        className={`flex flex-col items-center gap-2 w-full ${anexo || liberado ? 'cursor-pointer' : 'cursor-default'}`}
                       >
-                        {e.rotulo}
-                        {item.situacao === 'a_vencer' && dias != null ? ` ${dias}d` : ''}
-                      </span>
-                      {item.situacao === 'a_vencer' || item.situacao === 'vencido' || item.situacao === 'valido' ? (
-                        item.data_vencimento ? (
-                          <span className="text-[10px] text-[#687582]">Vence {formatDateBR(item.data_vencimento)}</span>
-                        ) : null
-                      ) : null}
-                      {liberado && (
-                        <span className="mt-auto flex items-center justify-center gap-1.5 w-full py-2 border border-[#DDE3E8] group-hover:border-[#7C3AED] group-hover:bg-[#F7F4FE] rounded-lg text-[11px] font-semibold text-[#17212B] transition-colors">
-                          {item.documento_id ? <><RefreshCw className="w-3.5 h-3.5" />Substituir</> : <><Upload className="w-3.5 h-3.5" />Anexar</>}
+                        <Icone className="w-7 h-7 text-[#5B21E6] mt-1" strokeWidth={1.6} />
+                        <span className="text-[11px] font-bold text-[#17212B] leading-tight line-clamp-2 uppercase min-h-[1.75rem] flex items-center">
+                          {rotuloCurto(item.codigo)}
                         </span>
+                        <span
+                          className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold border max-w-full truncate"
+                          style={{ color: e.texto, backgroundColor: e.fundo, borderColor: e.borda }}
+                        >
+                          {e.rotulo}
+                          {item.situacao === 'a_vencer' && dias != null ? ` ${dias}d` : ''}
+                        </span>
+                        {item.data_vencimento && item.situacao !== 'pendente' && (
+                          <span className="text-[10px] text-[#687582]">Vence {formatDateBR(item.data_vencimento)}</span>
+                        )}
+                      </button>
+
+                      {anexo ? (
+                        <>
+                          {/* Ver · Baixar · Excluir — o arquivo em si, sem sair da tela */}
+                          <div className="mt-auto flex items-center justify-center gap-1 w-full pt-1">
+                            <button
+                              onClick={() => comArquivo(anexo, 'ver')}
+                              disabled={ocupado}
+                              title="Visualizar"
+                              aria-label={`Visualizar ${item.nome}`}
+                              className="flex-1 flex items-center justify-center py-1.5 border border-[#DDE3E8] hover:border-[#7C3AED] hover:bg-[#F7F4FE] rounded-lg text-[#17212B] transition-colors cursor-pointer disabled:opacity-50"
+                            >
+                              {ocupado ? (
+                                <span className="w-3.5 h-3.5 border-2 border-[#7C3AED]/30 border-t-[#7C3AED] rounded-full animate-spin" />
+                              ) : (
+                                <Eye className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                            <button
+                              onClick={() => comArquivo(anexo, 'baixar')}
+                              disabled={ocupado}
+                              title="Baixar"
+                              aria-label={`Baixar ${item.nome}`}
+                              className="flex-1 flex items-center justify-center py-1.5 border border-[#DDE3E8] hover:border-[#176B87] hover:bg-[#EEF4F7] rounded-lg text-[#17212B] transition-colors cursor-pointer disabled:opacity-50"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                            </button>
+                            {perm.excluir && (
+                              <button
+                                onClick={() => setExcluindo(anexo)}
+                                disabled={ocupado}
+                                title="Excluir"
+                                aria-label={`Excluir ${item.nome}`}
+                                className="flex-1 flex items-center justify-center py-1.5 border border-[#DDE3E8] hover:border-[#D64550] hover:bg-[#FDEBEC] text-[#17212B] hover:text-[#D64550] rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                          {liberado && (
+                            <button
+                              onClick={() => abrirUpload(item)}
+                              className="flex items-center justify-center gap-1.5 w-full py-1.5 border border-[#DDE3E8] hover:border-[#D4890A] hover:bg-[#FEF3E0] rounded-lg text-[11px] font-semibold text-[#17212B] transition-colors cursor-pointer"
+                            >
+                              <RefreshCw className="w-3.5 h-3.5" /> Substituir
+                            </button>
+                          )}
+                        </>
+                      ) : (
+                        liberado && (
+                          <button
+                            onClick={() => abrirUpload(item)}
+                            className="mt-auto flex items-center justify-center gap-1.5 w-full py-2 border border-[#DDE3E8] group-hover:border-[#7C3AED] group-hover:bg-[#F7F4FE] rounded-lg text-[11px] font-semibold text-[#17212B] transition-colors cursor-pointer"
+                          >
+                            <Upload className="w-3.5 h-3.5" /> Anexar
+                          </button>
+                        )
                       )}
-                    </button>
+                    </div>
                   );
                 })}
           </div>
@@ -814,14 +947,23 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
       {showListaCompleta && (
         <ListaCompletaModal
           checklist={checklist}
-          funcao={colaborador.funcao}
+          funcao={funcaoDoc}
+          anexados={anexados}
+          onAbrir={(doc, acao) => { setShowListaCompleta(false); comArquivo(doc, acao); }}
           podeAgir={podeAgirNoItem}
           onAnexar={item => { setShowListaCompleta(false); abrirUpload(item); }}
           onClose={() => setShowListaCompleta(false)}
         />
       )}
 
-      {preview && <PreviewModal url={preview.url} nome={preview.nome} onClose={() => setPreview(null)} />}
+      {preview && (
+        <PreviewModal
+          url={preview.url}
+          nome={preview.nome}
+          onBaixar={() => comArquivo(preview.doc, 'baixar')}
+          onClose={() => setPreview(null)}
+        />
+      )}
     </div>
   );
 };
@@ -935,14 +1077,18 @@ function ExcluirDocumentoModal({
 function ListaCompletaModal({
   checklist,
   funcao,
+  anexados,
   podeAgir,
   onAnexar,
+  onAbrir,
   onClose,
 }: {
   checklist: ChecklistItem[];
   funcao: string;
+  anexados: Documento[];
   podeAgir: (item: ChecklistItem) => boolean;
   onAnexar: (item: ChecklistItem) => void;
+  onAbrir: (doc: Documento, acao: 'ver' | 'baixar') => void;
   onClose: () => void;
 }) {
   const ok = checklist.filter(i => i.situacao !== 'pendente' && i.situacao !== 'vencido').length;
@@ -965,6 +1111,7 @@ function ListaCompletaModal({
             const Icone = iconeDoTipo(item.codigo);
             const e = ESTILO_SITUACAO[item.situacao];
             const liberado = podeAgir(item);
+            const anexo = item.documento_id ? anexados.find(d => d.id === item.documento_id) : undefined;
             return (
               <li key={item.tipo_id} className="flex items-center gap-3 px-5 py-3">
                 <Icone className="w-5 h-5 text-[#5B21E6] shrink-0" strokeWidth={1.7} />
@@ -980,6 +1127,26 @@ function ListaCompletaModal({
                 >
                   {e.rotulo}
                 </span>
+                {anexo && (
+                  <>
+                    <button
+                      onClick={() => onAbrir(anexo, 'ver')}
+                      title="Visualizar"
+                      aria-label={`Visualizar ${item.nome}`}
+                      className="p-1.5 border border-[#DDE3E8] hover:border-[#7C3AED] rounded-lg text-[#17212B] cursor-pointer shrink-0"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => onAbrir(anexo, 'baixar')}
+                      title="Baixar"
+                      aria-label={`Baixar ${item.nome}`}
+                      className="p-1.5 border border-[#DDE3E8] hover:border-[#176B87] rounded-lg text-[#17212B] cursor-pointer shrink-0"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                    </button>
+                  </>
+                )}
                 {liberado && (
                   <button
                     onClick={() => onAnexar(item)}

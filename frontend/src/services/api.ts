@@ -623,6 +623,38 @@ export async function fetchColaboradores(params: {
   return json;
 }
 
+/** Permissões do usuário logado — o menu e os botões seguem isto. */
+export async function fetchPermissoesUsuario(): Promise<{
+  success: boolean;
+  data: import('../types').PermissoesUsuario;
+}> {
+  const res = await apiFetch('/api/auth/permissoes');
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Erro ao carregar permissões');
+  return json;
+}
+
+/** Dias que tiveram contratação, com a quantidade — abas de Admissões. */
+export async function fetchDiasDeContratacao(): Promise<{
+  success: boolean;
+  data: import('../types').DiaDeContratacao[];
+}> {
+  const res = await apiFetch('/api/admissoes/contratados/resumo');
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Erro ao carregar os dias de contratação');
+  return json;
+}
+
+/** Quem foi contratado num dia. Só leitura: os dados moram no efetivo. */
+export async function fetchContratadosDoDia(
+  data: string
+): Promise<{ success: boolean; data: import('../types').Colaborador[] }> {
+  const res = await apiFetch(`/api/admissoes/contratados?data=${encodeURIComponent(data)}`);
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Erro ao carregar os contratados do dia');
+  return json;
+}
+
 export async function contratarAdmissao(
   admissaoId: string,
   data: { rg?: string; numero_chapa: string; data_admissao?: string }
@@ -723,9 +755,11 @@ export async function uploadDocumento(
 }
 
 export async function downloadDocumento(
-  id: string
-): Promise<{ success: boolean; url: string; nome_arquivo: string }> {
-  const res = await apiFetch(`/api/documentos/${id}/download`);
+  id: string,
+  paraBaixar = false
+): Promise<{ success: boolean; url: string; nome_arquivo: string; nome_download?: string }> {
+  // baixar=1 faz o link já vir com o nome amigável (ASO_NOME_DO_COLABORADOR.pdf)
+  const res = await apiFetch(`/api/documentos/${id}/download${paraBaixar ? '?baixar=1' : ''}`);
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || 'Erro ao obter link de download');
   return json;
@@ -830,6 +864,43 @@ export async function fetchFuncoesEmpresa(): Promise<{ success: boolean; data: F
   const res = await apiFetch('/api/documento-tipos/meta/funcoes');
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || 'Erro ao carregar funções');
+  return json;
+}
+
+/** Cria uma função usada só para documentos (não cria cargo no sistema). */
+export async function criarFuncaoDocumentos(
+  nome: string
+): Promise<{ success: boolean; data: FuncaoEmpresa }> {
+  const res = await apiFetch('/api/documento-tipos/meta/funcoes', {
+    method: 'POST',
+    body: JSON.stringify({ nome }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Erro ao criar a função');
+  return json;
+}
+
+/** Remove uma função criada aqui. Não apaga arquivos nem colaboradores. */
+export async function excluirFuncaoDocumentos(chave: string): Promise<{ success: boolean }> {
+  const res = await apiFetch(`/api/documento-tipos/meta/funcoes/${encodeURIComponent(chave)}`, {
+    method: 'DELETE',
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Erro ao excluir a função');
+  return json;
+}
+
+/** Define qual função de documentos o colaborador segue ('' volta para a do cadastro). */
+export async function definirFuncaoDocumentos(
+  colaboradorId: string,
+  funcao: string
+): Promise<{ success: boolean; data: { funcao: string; personalizada: boolean } }> {
+  const res = await apiFetch(`/api/documentos/funcao/${colaboradorId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ funcao }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Erro ao definir a função de documentos');
   return json;
 }
 

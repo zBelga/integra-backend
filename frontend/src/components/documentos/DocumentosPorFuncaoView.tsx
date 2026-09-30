@@ -2,8 +2,9 @@
  * Configurações → Documentos por Função
  *
  * Define quais documentos são obrigatórios para cada função/cargo da empresa.
- * As funções vêm do que JÁ existe no sistema (cargos cadastrados + funções dos
- * colaboradores e das admissões) — nenhuma função é criada aqui.
+ * A lista junta as funções que JÁ existem no sistema (cargos cadastrados +
+ * funções dos colaboradores e das admissões) com as funções criadas AQUI, que
+ * valem só para documentos e não viram cargo nem mudam o cadastro de ninguém.
  *
  * Marcar/desmarcar mexe SÓ na regra. Arquivos já enviados nunca são tocados:
  * tirar a exigência apenas faz o documento parar de contar como pendência.
@@ -20,12 +21,17 @@ import {
   Info,
   RotateCcw,
   ShieldCheck,
+  Plus,
+  Trash2,
+  Sparkles,
 } from 'lucide-react';
 import {
   fetchDocumentoTipos,
   fetchFuncoesEmpresa,
   fetchExigenciasResumo,
   salvarExigenciasFuncao,
+  criarFuncaoDocumentos,
+  excluirFuncaoDocumentos,
 } from '../../services/api';
 import type { DocumentoTipo, FuncaoEmpresa } from '../../types';
 import { iconeDoTipo } from '../../constants/documentosUI';
@@ -42,6 +48,9 @@ export const DocumentosPorFuncaoView: React.FC = () => {
   const [salvando, setSalvando] = useState(false);
   const [aviso, setAviso] = useState('');
   const [erro, setErro] = useState('');
+  const [novaFuncao, setNovaFuncao] = useState('');
+  const [criandoFuncao, setCriandoFuncao] = useState(false);
+  const [formFuncaoAberto, setFormFuncaoAberto] = useState(false);
 
   const carregar = useCallback(async () => {
     setIsLoading(true);
@@ -115,6 +124,46 @@ export const DocumentosPorFuncaoView: React.FC = () => {
     }
   };
 
+  const criarFuncao = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    const nome = novaFuncao.trim();
+    if (nome.length < 2) return setErro('Informe o nome da função.');
+    setCriandoFuncao(true);
+    setErro('');
+    try {
+      const res = await criarFuncaoDocumentos(nome);
+      const nova = res.data;
+      setFuncoes(prev => [...prev, nova].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')));
+      setNovaFuncao('');
+      setFormFuncaoAberto(false);
+      setFuncaoAtiva(nova.chave);
+      setSelecionados(new Set());
+      setAviso(`Função "${nova.nome}" criada. Marque os documentos dela e salve.`);
+    } catch (err: any) {
+      setErro(err.message || 'Não foi possível criar a função.');
+    } finally {
+      setCriandoFuncao(false);
+    }
+  };
+
+  const excluirFuncao = async (f: FuncaoEmpresa) => {
+    if (!confirm(`Excluir a função "${f.nome}"?\n\nSó a regra de documentos é apagada. Nenhum arquivo, colaborador ou cargo é alterado.`)) return;
+    setErro('');
+    try {
+      await excluirFuncaoDocumentos(f.chave);
+      setFuncoes(prev => prev.filter(x => x.chave !== f.chave));
+      setExigencias(prev => { const n = { ...prev }; delete n[f.chave]; return n; });
+      if (funcaoAtiva === f.chave) {
+        const outra = funcoes.find(x => x.chave !== f.chave);
+        setFuncaoAtiva(outra?.chave || '');
+        setSelecionados(new Set(outra ? exigencias[outra.chave] || [] : []));
+      }
+      setAviso(`Função "${f.nome}" removida.`);
+    } catch (err: any) {
+      setErro(err.message || 'Não foi possível excluir a função.');
+    }
+  };
+
   const funcoesFiltradas = useMemo(() => {
     const q = busca.trim().toLowerCase();
     if (!q) return funcoes;
@@ -137,6 +186,14 @@ export const DocumentosPorFuncaoView: React.FC = () => {
               Quais documentos cada função precisa entregar · {funcoes.length} {funcoes.length === 1 ? 'função' : 'funções'} no sistema
             </p>
           </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => { setFormFuncaoAberto(v => !v); setErro(''); }}
+            className="flex items-center gap-1.5 px-4 py-2.5 border border-[#7C3AED] text-[#7C3AED] hover:bg-[#F7F4FE] text-xs font-semibold rounded-xl transition-colors cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" /> Nova função
+          </button>
         </div>
         {houveMudanca && (
           <div className="flex items-center gap-2">
@@ -163,6 +220,45 @@ export const DocumentosPorFuncaoView: React.FC = () => {
           </div>
         )}
       </header>
+
+      {formFuncaoAberto && (
+        <form onSubmit={criarFuncao} className="bg-white rounded-2xl border border-[#E1D9FB] p-4 flex flex-wrap items-end gap-3">
+          <div className="flex-1 min-w-[220px]">
+            <label htmlFor="nova-funcao" className="block text-[11px] font-semibold text-[#17212B] mb-1">
+              Nome da função de documentos
+            </label>
+            <input
+              id="nova-funcao"
+              value={novaFuncao}
+              onChange={e => setNovaFuncao(e.target.value)}
+              maxLength={60}
+              autoFocus
+              placeholder="Ex.: Trabalho em Altura, Espaço Confinado, Terceirizado"
+              className="w-full px-3 py-2 text-xs border border-[#DDE3E8] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/25 focus:border-[#7C3AED]"
+            />
+            <p className="text-[11px] text-[#687582] mt-1.5">
+              Vale só para documentos: não cria cargo no sistema nem muda o cadastro de ninguém. Depois, na tela de
+              documentos do colaborador, escolha esta função em <strong>Função para documentos</strong>.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => { setFormFuncaoAberto(false); setNovaFuncao(''); }}
+              className="px-3 py-2.5 border border-[#DDE3E8] text-[#687582] text-xs font-semibold rounded-xl hover:border-[#B6C2CC] transition-colors cursor-pointer"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={criandoFuncao}
+              className="flex items-center gap-1.5 px-4 py-2.5 bg-[#7C3AED] hover:bg-[#6D28D9] text-white text-xs font-semibold rounded-xl transition-colors cursor-pointer disabled:opacity-50"
+            >
+              <Plus className="w-3.5 h-3.5" /> {criandoFuncao ? 'Criando...' : 'Criar função'}
+            </button>
+          </div>
+        </form>
+      )}
 
       <div className="flex items-start gap-2.5 rounded-xl border border-[#E1D9FB] bg-[#F7F4FE] px-3.5 py-2.5">
         <Info className="w-4 h-4 text-[#7C3AED] shrink-0 mt-px" />
@@ -221,16 +317,33 @@ export const DocumentosPorFuncaoView: React.FC = () => {
                 const qtd = (exigencias[f.chave] || []).length;
                 const ativa = f.chave === funcaoAtiva;
                 return (
-                  <button
+                  <div
                     key={f.chave}
                     onClick={() => trocarFuncao(f.chave)}
-                    className={`w-full text-left px-4 py-3 transition-colors cursor-pointer ${
+                    className={`group relative w-full text-left px-4 py-3 transition-colors cursor-pointer ${
                       ativa ? 'bg-[#F7F4FE] border-l-[3px] border-l-[#7C3AED]' : 'hover:bg-[#F8FAFB] border-l-[3px] border-l-transparent'
                     }`}
                   >
-                    <p className={`text-xs font-semibold truncate ${ativa ? 'text-[#7C3AED]' : 'text-[#17212B]'}`}>
-                      {f.nome}
-                    </p>
+                    <div className="flex items-center gap-1.5 pr-6">
+                      <p className={`text-xs font-semibold truncate ${ativa ? 'text-[#7C3AED]' : 'text-[#17212B]'}`}>
+                        {f.nome}
+                      </p>
+                      {f.personalizada && (
+                        <span title="Função criada só para documentos" className="shrink-0">
+                          <Sparkles className="w-3 h-3 text-[#7C3AED]" />
+                        </span>
+                      )}
+                    </div>
+                    {f.personalizada && (
+                      <button
+                        onClick={e => { e.stopPropagation(); excluirFuncao(f); }}
+                        aria-label={`Excluir função ${f.nome}`}
+                        title="Excluir esta função"
+                        className="absolute right-2 top-3 p-1 rounded-lg text-[#B6C2CC] hover:text-[#D64550] hover:bg-[#FDEBEC] opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                     <div className="flex items-center gap-3 mt-1 text-[10px] text-[#687582]">
                       <span className="flex items-center gap-1">
                         <Users className="w-3 h-3" />{f.colaboradores}
@@ -239,7 +352,7 @@ export const DocumentosPorFuncaoView: React.FC = () => {
                         {qtd > 0 ? `${qtd} obrigatório${qtd !== 1 ? 's' : ''}` : 'sem exigências'}
                       </span>
                     </div>
-                  </button>
+                  </div>
                 );
               })}
             </div>

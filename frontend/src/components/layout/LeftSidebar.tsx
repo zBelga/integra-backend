@@ -29,6 +29,8 @@ interface LeftSidebarProps {
   onCloseMobile?: () => void;
   selectedEmpresa?: Empresa | null;
   currentUser?: UsuarioSessao;
+  /** Permissões do cargo, vindas do servidor */
+  permissoes?: import('../../types').PermissoesUsuario | null;
   onLogout?: () => void;
 }
 
@@ -144,6 +146,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   onCloseMobile,
   selectedEmpresa,
   currentUser = { email: EMAIL_MASTER, name: 'Fabrício Oliveira', role: 'Administrador Geral' },
+  permissoes,
   onLogout,
 }) => {
   const companyColor = selectedEmpresa?.corPrimaria || '#176B87';
@@ -152,12 +155,22 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   const moduloAberto = MODULO_DA_VIEW[currentView];
   const modulo = moduloAberto ? MODULOS[moduloAberto] : null;
   // Telas de configuração só aparecem para quem pode configurar
+  const podeConfigurar = permissoes
+    ? permissoes.master || !!permissoes.modulos?.documentos?.editar
+    : false;
   const itensDoModulo = (modulo?.itens || []).filter(
-    item => !item.somenteGestao || podeConfigurarDocumentos(currentUser)
+    item => !item.somenteGestao || podeConfigurar
   );
 
-  const master = ehMaster(currentUser);
-  const verSolicitacoes = podeVerSolicitacoes(currentUser);
+  // O que vale é a resposta do servidor; sem ela, nada de Painel Master
+  const master = permissoes ? permissoes.master : false;
+  // Solicitações aparece para quem pede ou aprova alguma coisa, pela matriz
+  const verSolicitacoes = permissoes
+    ? permissoes.master ||
+      Object.values(permissoes.modulos || {}).some(
+        (m: any) => m && (m.solicitar || m.aprovar)
+      )
+    : false;
 
   const handleNavClick = (view: ActiveView) => {
     onNavigate(view);

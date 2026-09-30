@@ -1,15 +1,18 @@
 import { Router, Request, Response } from 'express';
 import { queryRows, executeQuery } from '../db.js';
+import { somenteMaster, ehMaster } from '../utils/permissoes.js';
 
 const router = Router();
 
 // GET /api/empresas
-router.get('/', async (_req: Request, res: Response) => {
+router.get('/', async (req: Request, res: Response) => {
   try {
-    const rows = await queryRows(
-      'SELECT * FROM empresas ORDER BY created_at DESC',
-      []
-    );
+    // Fora do master, o usuário só enxerga a empresa dele
+    const rows = ehMaster(req)
+      ? await queryRows('SELECT * FROM empresas ORDER BY created_at DESC', [])
+      : await queryRows('SELECT * FROM empresas WHERE id = ? ORDER BY created_at DESC', [
+          req.user?.empresa_id || '',
+        ]);
     res.json({ success: true, data: rows });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -17,7 +20,7 @@ router.get('/', async (_req: Request, res: Response) => {
 });
 
 // POST /api/empresas
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', somenteMaster, async (req: Request, res: Response) => {
   try {
     const { nome, razaoSocial, cnpj, segmento, corPrimaria, logoUrl, status } = req.body;
 
@@ -42,7 +45,7 @@ router.post('/', async (req: Request, res: Response) => {
 });
 
 // PUT /api/empresas/:id
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', somenteMaster, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { nome, razaoSocial, cnpj, segmento, corPrimaria, logoUrl, status } = req.body;
@@ -68,7 +71,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 });
 
 // DELETE /api/empresas/:id
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', somenteMaster, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const existing = await queryRows('SELECT nome FROM empresas WHERE id = ?', [id]);

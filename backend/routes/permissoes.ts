@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { queryRows, executeQuery, saveDbToDisk } from '../db.js';
 
+import { somenteMaster } from '../utils/permissoes.js';
 const router = Router();
 
 // GET /api/permissoes - List permissions by empresa_id and/or cargo_id
@@ -103,7 +104,7 @@ router.get('/cargo/:cargo_id', async (req: Request, res: Response) => {
 });
 
 // PUT /api/permissoes/cargo/:cargo_id - Update or replace permissions matrix for a cargo
-router.put('/cargo/:cargo_id', async (req: Request, res: Response) => {
+router.put('/cargo/:cargo_id', somenteMaster, async (req: Request, res: Response) => {
   try {
     const { cargo_id } = req.params;
     const { empresa_id, modulos } = req.body;

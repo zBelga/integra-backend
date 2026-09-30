@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, User, Mail, Lock, Building2, Briefcase, Phone, Layers, ShieldCheck, Check, AlertCircle, Plus, Info } from 'lucide-react';
-import { Empresa, UsuarioSistema, UsuarioFormData, PerfilUsuario, CargoEmpresa } from '../../types';
+import { X, User, Mail, Lock, Building2, Briefcase, Phone, Layers, ShieldCheck, AlertCircle, Plus, Info } from 'lucide-react';
+import { Empresa, UsuarioSistema, UsuarioFormData, CargoEmpresa } from '../../types';
 import { getCompanyTheme } from '../../utils/theme';
-import { fetchCargos } from '../../services/api';
+import { fetchCargos, fetchPermissoes } from '../../services/api';
 import { CargoFormModal } from './CargoFormModal';
 
 interface UsuarioFormModalProps {
@@ -14,13 +14,6 @@ interface UsuarioFormModalProps {
   selectedEmpresa?: Empresa | null;
 }
 
-const PERFIS_CONFIG: { id: PerfilUsuario; label: string; desc: string; badgeColor: string }[] = [
-  { id: 'administrador', label: 'Administrador de Empresa', desc: 'Acesso completo aos módulos e configurações da empresa vinculada', badgeColor: 'bg-[#E8F3F6] text-[#176B87] border-[#C6E3EB]' },
-  { id: 'gestor_rh', label: 'Gestor de RH & DP', desc: 'Gestão de admissões, documentações e controle de pessoal', badgeColor: 'bg-[#EDE9FE] text-[#6D28D9] border-[#DDD6FE]' },
-  { id: 'engenheiro', label: 'Engenheiro / Fiscal de Obras', desc: 'Gestão de canteiros, obras e alocação de equipes', badgeColor: 'bg-[#FEF3C7] text-[#D97706] border-[#FDE68A]' },
-  { id: 'operacional', label: 'Operacional / Administrativo', desc: 'Lançamentos diários e rotinas operacionais básicas', badgeColor: 'bg-[#F1F5F9] text-[#475569] border-[#E2E8F0]' },
-  { id: 'visualizador', label: 'Somente Leitura (Auditoria)', desc: 'Visualização de relatórios e painéis sem permissão de edição', badgeColor: 'bg-[#F3F4F6] text-[#6B7280] border-[#E5E7EB]' },
-];
 
 export const UsuarioFormModal: React.FC<UsuarioFormModalProps> = ({
   isOpen,
@@ -36,7 +29,8 @@ export const UsuarioFormModal: React.FC<UsuarioFormModalProps> = ({
     senha: '',
     cargo_id: '',
     cargo: '',
-    perfil: 'gestor_rh',
+    // Rótulo interno: quem manda no acesso é o cargo
+    perfil: 'operacional',
     empresa_id: selectedEmpresa?.id || empresas[0]?.id || '',
     status: 'ativo',
     telefone: '',
@@ -50,6 +44,9 @@ export const UsuarioFormModal: React.FC<UsuarioFormModalProps> = ({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  /** O que o cargo escolhido libera — conferência antes de salvar */
+  const [resumoCargo, setResumoCargo] = useState<string[]>([]);
+  const [carregandoResumo, setCarregandoResumo] = useState(false);
 
   const companyColor = selectedEmpresa?.corPrimaria || '#176B87';
   const theme = getCompanyTheme(companyColor);
@@ -120,7 +117,7 @@ export const UsuarioFormModal: React.FC<UsuarioFormModalProps> = ({
         senha: '',
         cargo_id: '',
         cargo: '',
-        perfil: 'gestor_rh',
+        perfil: 'operacional',
         empresa_id: initialEmpresaId,
         status: 'ativo',
         telefone: '',
@@ -142,6 +139,40 @@ export const UsuarioFormModal: React.FC<UsuarioFormModalProps> = ({
     }));
     loadCargosForEmpresa(newEmpresaId);
   };
+
+  /** Lê a matriz do cargo e monta a frase do que ele libera. */
+  useEffect(() => {
+    const cargoId = formData.cargo_id;
+    if (!cargoId) { setResumoCargo([]); return; }
+    let ativo = true;
+    setCarregandoResumo(true);
+    const NOMES: Record<string, string> = {
+      admissoes: 'Admissões', efetivo: 'Efetivo', obras: 'Obras', documentos: 'Documentação',
+      rh: 'Recursos Humanos', relatorios: 'Relatórios', usuarios: 'Gestão de Usuários',
+    };
+    const ACOES: [string, string][] = [
+      ['criar', 'criar'], ['editar', 'editar'], ['excluir', 'excluir'],
+      ['solicitar', 'solicitar'], ['aprovar', 'aprovar'],
+    ];
+    fetchPermissoes({ cargo_id: cargoId })
+      .then(res => {
+        if (!ativo) return;
+        const ORDEM = ['admissoes', 'efetivo', 'obras', 'documentos', 'rh', 'relatorios', 'usuarios'];
+        const linhas = (res.data || [])
+          .filter((p: any) => p.cargo_id === cargoId && p.visualizar && ORDEM.includes(String(p.modulo)))
+          .sort((a: any, b: any) => ORDEM.indexOf(String(a.modulo)) - ORDEM.indexOf(String(b.modulo)));
+        setResumoCargo(
+          linhas.map((p: any) => {
+            const pode = ACOES.filter(([campo]) => p[campo]).map(([, rotulo]) => rotulo);
+            const nome = NOMES[String(p.modulo)] || String(p.modulo);
+            return pode.length ? `${nome}: ver, ${pode.join(', ')}` : `${nome}: apenas ver`;
+          })
+        );
+      })
+      .catch(() => { if (ativo) setResumoCargo([]); })
+      .finally(() => { if (ativo) setCarregandoResumo(false); });
+    return () => { ativo = false; };
+  }, [formData.cargo_id]);
 
   const handleCargoChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const selectedId = e.target.value;
@@ -194,8 +225,8 @@ export const UsuarioFormModal: React.FC<UsuarioFormModalProps> = ({
       return;
     }
 
-    if (!formData.cargo.trim() && !formData.cargo_id) {
-      setErrorMessage('Selecione o cargo / função do usuário dentro da empresa.');
+    if (!formData.cargo_id) {
+      setErrorMessage('Selecione o cargo do usuário. É o cargo que define o que ele pode fazer no sistema.');
       return;
     }
 
@@ -236,7 +267,7 @@ export const UsuarioFormModal: React.FC<UsuarioFormModalProps> = ({
                   </span>
                 </div>
                 <p className="text-xs text-[#687582]">
-                  Defina o cargo profissional na empresa e o perfil de acesso no sistema.
+                  Defina o cargo do colaborador — é ele que traz as permissões de acesso.
                 </p>
               </div>
             </div>
@@ -423,9 +454,29 @@ export const UsuarioFormModal: React.FC<UsuarioFormModalProps> = ({
                     </select>
                   </div>
 
+                  {/* Conferência: o que este cargo libera */}
+                  {formData.cargo_id && (
+                    <div className="rounded-xl border border-[#E1D9FB] bg-[#F7F4FE] px-3.5 py-2.5">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-[#6D28D9] mb-1">
+                        Com este cargo, a pessoa poderá
+                      </p>
+                      {carregandoResumo ? (
+                        <p className="text-[11px] text-[#687582]">Carregando permissões...</p>
+                      ) : resumoCargo.length === 0 ? (
+                        <p className="text-[11px] text-[#687582]">
+                          Nenhum módulo liberado ainda. Ajuste em Permissões por Cargo.
+                        </p>
+                      ) : (
+                        <ul className="text-[11px] text-[#17212B] space-y-0.5">
+                          {resumoCargo.map(l => <li key={l}>• {l}</li>)}
+                        </ul>
+                      )}
+                    </div>
+                  )}
+
                   <div className="flex items-center justify-between pt-1">
                     <p className="text-[11px] text-[#687582]">
-                      Exemplos: <em>Encarregado, Assistente, Pedreiro, Engenheiro, Almoxarife</em>
+                      O cargo define o acesso. Ajuste as marcações em Permissões por Cargo.
                     </p>
                     <span className="text-[10px] font-medium text-[#176B87]">
                       {cargos.length} cargo(s) disponível(is) para {selectedTargetEmpresa?.nome}
@@ -450,44 +501,6 @@ export const UsuarioFormModal: React.FC<UsuarioFormModalProps> = ({
                   </div>
                 </div>
 
-              </div>
-            </div>
-
-            {/* Section 3: Perfil de Acesso & Permissões no Sistema */}
-            <div className="space-y-2.5 text-left pt-3 border-t border-[#DDE3E8]">
-              <div className="flex items-center justify-between">
-                <label className="block text-xs font-bold uppercase tracking-wider text-[#17212B]">
-                  3. Perfil de Acesso & Permissões no Sistema *
-                </label>
-                <span className="text-[10px] text-[#687582]">Controla quais telas e ações o usuário acessa</span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {PERFIS_CONFIG.map((perfil) => {
-                  const isSelected = formData.perfil === perfil.id;
-                  return (
-                    <button
-                      key={perfil.id}
-                      type="button"
-                      onClick={() => setFormData({ ...formData, perfil: perfil.id })}
-                      className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                        isSelected
-                          ? 'border-[#176B87] bg-[#E8F3F6] shadow-2xs ring-1 ring-[#176B87]'
-                          : 'border-[#DDE3E8] bg-white hover:bg-[#F8FAFB]'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between w-full mb-1">
-                        <span className="text-xs font-bold text-[#17212B]">{perfil.label}</span>
-                        {isSelected && (
-                          <div className="w-4 h-4 rounded-full bg-[#176B87] text-white flex items-center justify-center">
-                            <Check className="w-3 h-3" />
-                          </div>
-                        )}
-                      </div>
-                      <p className="text-[10px] text-[#687582] leading-tight">{perfil.desc}</p>
-                    </button>
-                  );
-                })}
               </div>
             </div>
 

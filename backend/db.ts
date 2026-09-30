@@ -189,6 +189,7 @@ async function getDbSqlite(): Promise<Database> {
         obra_id TEXT NOT NULL,
         data_admissao TEXT NOT NULL,
         data_aso TEXT DEFAULT '',
+        contratado_em TEXT DEFAULT '',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
@@ -222,6 +223,10 @@ async function getDbSqlite(): Promise<Database> {
   } catch {}
   try {
     db.run("ALTER TABLE obras ADD COLUMN empresa_id TEXT DEFAULT 'emp-001'");
+  } catch {}
+  // Dia em que o colaborador foi marcado como contratado (abas de contratados)
+  try {
+    db.run("ALTER TABLE colaboradores ADD COLUMN contratado_em TEXT DEFAULT ''");
   } catch {}
 
   // Check if initial seed for empresas is needed

@@ -11,6 +11,7 @@
 import { Router, Request, Response } from 'express';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { queryRows } from '../db.js';
+import { pode } from '../utils/documentosAcesso.js';
 
 const router = Router();
 
@@ -29,10 +30,12 @@ function empresaDoPedido(req: Request): string {
   return doToken || daQuery;
 }
 
-/** Quem pode mexer no catálogo e nas regras. Não altera permissões globais. */
-const PERFIS_GESTAO = new Set(['master_admin', 'administrador', 'gestor_rh']);
-function podeGerenciar(req: Request): boolean {
-  return PERFIS_GESTAO.has(String(req.user?.perfil || ''));
+/**
+ * Quem pode mexer no catálogo e nas regras: o master, ou o cargo com
+ * permissão de EDITAR no módulo Documentação (Permissões por Cargo).
+ */
+async function podeGerenciar(req: Request): Promise<boolean> {
+  return pode(req, 'editar');
 }
 function bloqueado(res: Response) {
   return res
@@ -82,6 +85,12 @@ router.get('/meta/funcoes', async (req: Request, res: Response) => {
     const empresa_id = empresaDoPedido(req);
     if (!empresa_id) return res.status(400).json({ success: false, error: 'Empresa não identificada.' });
 
+    const sb = getSupabase();
+    const [{ data: personalizadas }, { data: vinculos }] = await Promise.all([
+      sb.from('documento_funcoes').select('*').eq('empresa_id', empresa_id),
+      sb.from('documento_colaborador_funcao').select('colaborador_id, funcao').eq('empresa_id', empresa_id),
+    ]);
+
     const [cargos, colabs, adms] = await Promise.all([
       queryRows('SELECT nome FROM cargos WHERE empresa_id = ? AND status = ?', [empresa_id, 'ativo']),
       queryRows('SELECT DISTINCT funcao FROM colaboradores WHERE empresa_id = ?', [empresa_id]),
@@ -100,20 +109,152 @@ router.get('/meta/funcoes', async (req: Request, res: Response) => {
     (colabs as any[]).forEach(c => juntar(c.funcao));
     (adms as any[]).forEach(a => juntar(a.funcao));
 
+    // Funções criadas aqui, só para documentos
+    const chavesPersonalizadas = new Set<string>();
+    (personalizadas || []).forEach(f => {
+      chavesPersonalizadas.add(f.chave);
+      if (!mapa.has(f.chave)) mapa.set(f.chave, f.nome);
+    });
+
     // Quantos colaboradores em cada função — ajuda a priorizar na tela
-    const contagem = new Map<string, number>();
-    (colabs as any[]).forEach(() => {});
-    const porFuncao = (await queryRows(
-      'SELECT funcao, COUNT(*) as total FROM colaboradores WHERE empresa_id = ? GROUP BY funcao',
+    // Contagem pela função que VALE para documentos (o vínculo manual manda)
+    const porColaborador = (await queryRows(
+      'SELECT id, funcao FROM colaboradores WHERE empresa_id = ?',
       [empresa_id]
     )) as any[];
-    porFuncao.forEach(r => contagem.set(normalizar(r.funcao), Number(r.total) || 0));
+    const vinculoPorId = new Map<string, string>();
+    (vinculos || []).forEach(v => vinculoPorId.set(String(v.colaborador_id), normalizar(v.funcao)));
+
+    const contagem = new Map<string, number>();
+    porColaborador.forEach(c => {
+      const chave = vinculoPorId.get(String(c.id)) || normalizar(c.funcao);
+      if (!chave) return;
+      contagem.set(chave, (contagem.get(chave) || 0) + 1);
+      if (!mapa.has(chave)) mapa.set(chave, String(c.funcao || chave));
+    });
 
     const data = Array.from(mapa.entries())
-      .map(([chave, rotulo]) => ({ chave, nome: rotulo, colaboradores: contagem.get(chave) || 0 }))
+      .map(([chave, rotulo]) => ({
+        chave,
+        nome: rotulo,
+        colaboradores: contagem.get(chave) || 0,
+        personalizada: chavesPersonalizadas.has(chave),
+      }))
       .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
 
     res.json({ success: true, data });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/documento-tipos/meta/funcoes — cria uma função SÓ para documentos.
+ *
+ * Não cria cargo nenhum no sistema e não altera o cadastro de ninguém: serve
+ * para agrupar exigências (ex.: "Trabalho em Altura") e depois ligar os
+ * colaboradores a ela na tela de documentos.
+ */
+router.post('/meta/funcoes', async (req: Request, res: Response) => {
+  try {
+    if (!(await podeGerenciar(req))) return bloqueado(res);
+
+    const empresa_id = empresaDoPedido(req);
+    const nome = String(req.body.nome || '').trim().replace(/\s+/g, ' ');
+    if (!empresa_id) return res.status(400).json({ success: false, error: 'Empresa não identificada.' });
+    if (nome.length < 2) return res.status(400).json({ success: false, error: 'Informe o nome da função.' });
+    if (nome.length > 60) return res.status(400).json({ success: false, error: 'O nome pode ter no máximo 60 caracteres.' });
+
+    const chave = normalizar(nome);
+    const sb = getSupabase();
+
+    // Já existe como cargo/função do sistema? Então não precisa criar.
+    const [cargos, colabs, adms] = await Promise.all([
+      queryRows('SELECT nome FROM cargos WHERE empresa_id = ?', [empresa_id]),
+      queryRows('SELECT DISTINCT funcao FROM colaboradores WHERE empresa_id = ?', [empresa_id]),
+      queryRows('SELECT DISTINCT funcao FROM admissoes WHERE empresa_id = ?', [empresa_id]),
+    ]);
+    const jaExiste = [
+      ...(cargos as any[]).map(c => normalizar(c.nome)),
+      ...(colabs as any[]).map(c => normalizar(c.funcao)),
+      ...(adms as any[]).map(a => normalizar(a.funcao)),
+    ].includes(chave);
+    if (jaExiste) {
+      return res.status(409).json({ success: false, error: 'Essa função já aparece na lista. Selecione-a na coluna da esquerda.' });
+    }
+
+    const { data: repetida } = await sb
+      .from('documento_funcoes')
+      .select('id')
+      .eq('empresa_id', empresa_id)
+      .eq('chave', chave)
+      .maybeSingle();
+    if (repetida) return res.status(409).json({ success: false, error: 'Já existe uma função com esse nome.' });
+
+    const { data, error } = await sb
+      .from('documento_funcoes')
+      .insert({
+        empresa_id,
+        nome,
+        chave,
+        descricao: String(req.body.descricao || '').trim(),
+        criado_por: req.user?.nome || '',
+      })
+      .select()
+      .single();
+    if (error) throw error;
+
+    await registrarHistorico(sb, req, 'exigencia', chave, 'funcao_criada', `Função de documentos criada: ${nome}`);
+    res.json({ success: true, data: { chave, nome: data.nome, colaboradores: 0, personalizada: true } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * DELETE /api/documento-tipos/meta/funcoes/:chave — remove uma função criada aqui.
+ * Só remove a REGRA e o vínculo: nenhum arquivo, colaborador ou cargo é tocado.
+ */
+router.delete('/meta/funcoes/:chave', async (req: Request, res: Response) => {
+  try {
+    if (!(await podeGerenciar(req))) return bloqueado(res);
+
+    const empresa_id = empresaDoPedido(req);
+    const chave = normalizar(req.params.chave);
+    const sb = getSupabase();
+
+    const { data: funcao } = await sb
+      .from('documento_funcoes')
+      .select('id, nome')
+      .eq('empresa_id', empresa_id)
+      .eq('chave', chave)
+      .maybeSingle();
+
+    if (!funcao) {
+      return res.status(400).json({
+        success: false,
+        error: 'Só dá para excluir funções criadas aqui. As funções vindas dos cargos e do efetivo não podem ser removidas.',
+      });
+    }
+
+    const { count } = await sb
+      .from('documento_colaborador_funcao')
+      .select('colaborador_id', { count: 'exact', head: true })
+      .eq('empresa_id', empresa_id)
+      .eq('funcao', chave);
+
+    if ((count || 0) > 0) {
+      return res.status(409).json({
+        success: false,
+        error: `${count} colaborador(es) ainda usam esta função. Troque a função deles antes de excluir.`,
+      });
+    }
+
+    await sb.from('documento_exigencias').delete().eq('empresa_id', empresa_id).eq('funcao', chave);
+    await sb.from('documento_funcoes').delete().eq('id', funcao.id);
+
+    await registrarHistorico(sb, req, 'exigencia', chave, 'funcao_removida', `Função de documentos removida: ${funcao.nome}`);
+    res.json({ success: true, data: { chave } });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -148,7 +289,7 @@ router.get('/exigencias/lista', async (req: Request, res: Response) => {
  */
 router.put('/exigencias', async (req: Request, res: Response) => {
   try {
-    if (!podeGerenciar(req)) return bloqueado(res);
+    if (!(await podeGerenciar(req))) return bloqueado(res);
 
     const empresa_id = empresaDoPedido(req);
     const funcao = normalizar(req.body.funcao);
@@ -266,7 +407,7 @@ router.get('/', async (req: Request, res: Response) => {
 /** POST /api/documento-tipos — cria um tipo novo no catálogo da empresa */
 router.post('/', async (req: Request, res: Response) => {
   try {
-    if (!podeGerenciar(req)) return bloqueado(res);
+    if (!(await podeGerenciar(req))) return bloqueado(res);
 
     const empresa_id = empresaDoPedido(req);
     const nome = String(req.body.nome || '').trim();
@@ -332,7 +473,7 @@ router.post('/', async (req: Request, res: Response) => {
 /** PUT /api/documento-tipos/:id — edita (inclusive os 8 padrão) */
 router.put('/:id', async (req: Request, res: Response) => {
   try {
-    if (!podeGerenciar(req)) return bloqueado(res);
+    if (!(await podeGerenciar(req))) return bloqueado(res);
 
     const empresa_id = empresaDoPedido(req);
     const sb = getSupabase();
@@ -422,7 +563,7 @@ router.put('/:id', async (req: Request, res: Response) => {
  */
 router.patch('/:id/status', async (req: Request, res: Response) => {
   try {
-    if (!podeGerenciar(req)) return bloqueado(res);
+    if (!(await podeGerenciar(req))) return bloqueado(res);
 
     const status = req.body.status === 'ativo' ? 'ativo' : 'inativo';
     const empresa_id = empresaDoPedido(req);

@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { queryRows, executeQuery } from '../db.js';
-import { verifyCargoPermission } from './permissoes.js';
+import { exigir } from '../utils/permissoes.js';
 
 const router = Router();
 
@@ -17,18 +17,8 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // POST /api/obras - Create new obra
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', exigir('obras', 'criar'), async (req: Request, res: Response) => {
   try {
-    const userCargoId = req.headers['x-user-cargo-id'] as string || req.body.cargo_id;
-    if (userCargoId) {
-      const allowed = await verifyCargoPermission(userCargoId, 'obras', 'criar');
-      if (!allowed) {
-        return res.status(403).json({
-          success: false,
-          error: 'Seu cargo não possui permissão para cadastrar novas obras.',
-        });
-      }
-    }
 
     const { nome, codigo } = req.body;
 
@@ -63,18 +53,8 @@ router.post('/', async (req: Request, res: Response) => {
 });
 
 // PUT /api/obras/:id - Update obra
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', exigir('obras', 'editar'), async (req: Request, res: Response) => {
   try {
-    const userCargoId = req.headers['x-user-cargo-id'] as string || req.body.cargo_id;
-    if (userCargoId) {
-      const allowed = await verifyCargoPermission(userCargoId, 'obras', 'editar_direto');
-      if (!allowed) {
-        return res.status(403).json({
-          success: false,
-          error: 'Seu cargo não possui permissão de alteração direta nesta obra.',
-        });
-      }
-    }
 
     const { id } = req.params;
     const { nome, codigo } = req.body;
@@ -114,18 +94,8 @@ router.put('/:id', async (req: Request, res: Response) => {
 });
 
 // DELETE /api/obras/:id - Delete obra
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', exigir('obras', 'excluir'), async (req: Request, res: Response) => {
   try {
-    const userCargoId = req.headers['x-user-cargo-id'] as string;
-    if (userCargoId) {
-      const allowed = await verifyCargoPermission(userCargoId, 'obras', 'excluir');
-      if (!allowed) {
-        return res.status(403).json({
-          success: false,
-          error: 'Seu cargo não possui permissão para excluir obras.',
-        });
-      }
-    }
 
     const { id } = req.params;
 

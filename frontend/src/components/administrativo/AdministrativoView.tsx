@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { UserPlus, Search, Building, X, Download, Upload, Loader2, Send, ShieldCheck, Users } from 'lucide-react';
-import { ActiveView, Admissao, AdmissaoFilterState, AdmissaoFormData, Empresa, Obra, PaginationMeta } from '../../types';
-import { fetchAdmissoes, createAdmissao, updateAdmissao, deleteAdmissao, fetchObras, createObra, updateObra, deleteObra, fetchSolicitacoesStats, contratarAdmissao } from '../../services/api';
+import { UserPlus, Search, Building, X, Download, Upload, Loader2, Send, ShieldCheck, Users, ClipboardList, UserCheck, ChevronDown } from 'lucide-react';
+import { ActiveView, Admissao, AdmissaoFilterState, AdmissaoFormData, DiaDeContratacao, Empresa, Obra, PaginationMeta } from '../../types';
+import { fetchAdmissoes, createAdmissao, updateAdmissao, deleteAdmissao, fetchObras, createObra, updateObra, deleteObra, fetchSolicitacoesStats, contratarAdmissao, fetchDiasDeContratacao } from '../../services/api';
 import { useDebounce } from '../../utils/debounce';
 import { AdmissaoTable } from './AdmissaoTable';
+import { ContratadosDoDia } from './ContratadosDoDia';
 import { ContrataModal } from './ContrataModal';
 import { AdmissaoFormModal } from './AdmissaoFormModal';
 import { ObrasModal } from './ObrasModal';
@@ -18,15 +19,27 @@ interface AdministrativoViewProps {
   onShowToast: (toast: ToastMessage) => void;
   selectedEmpresa?: Empresa | null;
   onNavigate?: (view: ActiveView) => void;
+  /** Permissões do cargo — decidem quais botões aparecem */
+  permissoes?: import('../../types').PermissoesUsuario | null;
 }
 
 export const AdministrativoView: React.FC<AdministrativoViewProps> = ({ 
   onShowToast,
   selectedEmpresa,
   onNavigate,
+  permissoes,
 }) => {
   const companyColor = selectedEmpresa?.corPrimaria || '#176B87';
   const theme = getCompanyTheme(companyColor);
+
+  // O que este cargo pode fazer em Admissões e Obras (o servidor confere de novo)
+  const master = !!permissoes?.master;
+  const admPerm = permissoes?.modulos?.admissoes;
+  const podeCriarAdmissao = master || !!admPerm?.criar;
+  const podeEditarAdmissao = master || !!admPerm?.editar;
+  const podeExcluirAdmissao = master || !!admPerm?.excluir;
+  const podeGerenciarObras =
+    master || !!permissoes?.modulos?.obras?.criar || !!permissoes?.modulos?.obras?.editar;
 
   // Active simulated role inside the module
   const [activeRole, setActiveRole] = useState<'encarregado' | 'assistente' | 'master'>('encarregado');
@@ -66,6 +79,11 @@ export const AdministrativoView: React.FC<AdministrativoViewProps> = ({
   const [deleteTarget, setDeleteTarget] = useState<Admissao | null>(null);
   const [contratarAdm, setContratarAdm] = useState<Admissao | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Abas: 'abertas' = admissões em andamento; ou um dia (AAAA-MM-DD) de contratados
+  const [abaAtiva, setAbaAtiva] = useState<string>('abertas');
+  const [diasContratacao, setDiasContratacao] = useState<DiaDeContratacao[]>([]);
+  const [verTodosOsDias, setVerTodosOsDias] = useState(false);
 
   // Excel Import / Export states
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -116,6 +134,16 @@ export const AdministrativoView: React.FC<AdministrativoViewProps> = ({
     }
   }, [meta.page, meta.limit, debouncedSearch, filters.obra_id, filters.funcao, filters.data_inicio, filters.data_fim, onShowToast]);
 
+  /** Dias que tiveram contratação — uma aba para cada um. */
+  const loadDiasContratacao = useCallback(async () => {
+    try {
+      const res = await fetchDiasDeContratacao();
+      if (res.success) setDiasContratacao(res.data || []);
+    } catch {
+      /* a aba de dias é um extra: falha aqui não atrapalha as admissões */
+    }
+  }, []);
+
   // Load pending requests count for badge
   const loadPendingStats = useCallback(async () => {
     try {
@@ -131,7 +159,8 @@ export const AdministrativoView: React.FC<AdministrativoViewProps> = ({
   useEffect(() => {
     loadObras();
     loadPendingStats();
-  }, [loadObras, loadPendingStats]);
+    loadDiasContratacao();
+  }, [loadObras, loadPendingStats, loadDiasContratacao]);
 
   useEffect(() => {
     loadAdmissoes();
@@ -213,6 +242,7 @@ export const AdministrativoView: React.FC<AdministrativoViewProps> = ({
     await contratarAdmissao(admissaoId, data);
     setContratarAdm(null);
     await loadAdmissoes();
+    await loadDiasContratacao(); // a aba do dia aparece na hora
   };
 
   const handleCreateObra = async (data: { nome: string; codigo: string }) => {
@@ -365,8 +395,8 @@ export const AdministrativoView: React.FC<AdministrativoViewProps> = ({
             </button>
           )}
 
-          {/* Link to Permissoes */}
-          {onNavigate && (
+          {/* Link to Permissoes — só o master configura */}
+          {onNavigate && master && (
             <button
               onClick={() => onNavigate('permissoes')}
               className="px-3.5 py-2 border border-[#DDE3E8] bg-white hover:bg-[#F8FAFB] rounded-xl text-xs font-semibold text-[#17212B] transition-colors flex items-center space-x-1.5 shadow-2xs cursor-pointer"
@@ -392,26 +422,26 @@ export const AdministrativoView: React.FC<AdministrativoViewProps> = ({
           </button>
 
           {/* Import from Excel */}
-          <button
+          {podeCriarAdmissao && (<button
             onClick={() => setIsImportModalOpen(true)}
             className="px-3 py-2 border border-[#DDE3E8] rounded-xl text-xs font-semibold text-[#17212B] bg-white hover:bg-[#F8FAFB] transition-colors flex items-center space-x-1.5 shadow-2xs cursor-pointer"
             title="Importar lista de admissões via planilha Excel"
           >
             <Upload className="w-4 h-4 text-[#687582]" />
             <span>Importar Planilha</span>
-          </button>
+          </button>)}
 
           {/* Gerenciar Obras */}
-          <button
+          {podeGerenciarObras && (<button
             onClick={() => setIsObrasModalOpen(true)}
             className="px-3.5 py-2 border border-[#DDE3E8] rounded-xl text-xs font-semibold text-[#17212B] bg-white hover:bg-[#F8FAFB] transition-colors flex items-center space-x-1.5 shadow-2xs cursor-pointer"
           >
             <Building className="w-4 h-4" style={{ color: companyColor }} />
             <span>Gerenciar Obras</span>
-          </button>
+          </button>)}
 
           {/* Nova Admissão (Styled in company's custom color) */}
-          <button
+          {podeCriarAdmissao && (<button
             onClick={() => {
               setEditingAdmissao(null);
               setIsFormOpen(true);
@@ -424,12 +454,73 @@ export const AdministrativoView: React.FC<AdministrativoViewProps> = ({
           >
             <UserPlus className="w-4 h-4" />
             <span>+ Nova admissão</span>
-          </button>
+          </button>)}
         </div>
       </div>
 
       {/* Main Content Area */}
       <div className="space-y-6">
+        {/* Abas: admissões em aberto + um dia para cada data de contratação */}
+        <div className="flex items-end gap-1.5 overflow-x-auto pb-px border-b border-[#DDE3E8]">
+          <button
+            onClick={() => setAbaAtiva('abertas')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer border border-b-0 ${
+              abaAtiva === 'abertas'
+                ? 'bg-white text-[#17212B] border-[#DDE3E8] -mb-px'
+                : 'bg-transparent text-[#687582] border-transparent hover:text-[#17212B]'
+            }`}
+            style={abaAtiva === 'abertas' ? { boxShadow: `inset 0 3px 0 ${companyColor}` } : undefined}
+          >
+            <ClipboardList className="w-3.5 h-3.5" />
+            Admissões em aberto
+            <span className="px-1.5 py-0.5 rounded-full bg-[#F4F6F8] text-[10px] font-bold text-[#687582]">
+              {meta.total}
+            </span>
+          </button>
+
+          {(verTodosOsDias ? diasContratacao : diasContratacao.slice(0, 7)).map((d) => {
+            const ativa = abaAtiva === d.data;
+            const [ano, mes, dia] = d.data.split('-');
+            return (
+              <button
+                key={d.data}
+                onClick={() => setAbaAtiva(d.data)}
+                title={`Contratados em ${dia}/${mes}/${ano}`}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer border border-b-0 ${
+                  ativa
+                    ? 'bg-white text-[#17212B] border-[#DDE3E8] -mb-px'
+                    : 'bg-transparent text-[#687582] border-transparent hover:text-[#17212B]'
+                }`}
+                style={ativa ? { boxShadow: `inset 0 3px 0 ${companyColor}` } : undefined}
+              >
+                <UserCheck className="w-3.5 h-3.5" />
+                Contratados {dia}/{mes}
+                <span className="px-1.5 py-0.5 rounded-full bg-[#E8F6F1] text-[10px] font-bold text-[#0F7A5A]">
+                  {d.total}
+                </span>
+              </button>
+            );
+          })}
+
+          {diasContratacao.length > 7 && (
+            <button
+              onClick={() => setVerTodosOsDias((v) => !v)}
+              className="flex items-center gap-1 px-3 py-2.5 text-xs font-semibold text-[#687582] hover:text-[#17212B] whitespace-nowrap cursor-pointer"
+            >
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${verTodosOsDias ? 'rotate-180' : ''}`} />
+              {verTodosOsDias ? 'Mostrar menos' : `Ver mais (${diasContratacao.length - 7})`}
+            </button>
+          )}
+        </div>
+
+        {abaAtiva !== 'abertas' ? (
+          <ContratadosDoDia
+            data={abaAtiva}
+            corEmpresa={companyColor}
+            onVerNoEfetivo={onNavigate ? () => onNavigate('efetivo') : undefined}
+          />
+        ) : (
+        <>
         {/* Filters & Search Panel */}
         <div className="bg-white border border-[#DDE3E8] rounded-2xl p-4 space-y-4 shadow-xs">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
@@ -550,6 +641,8 @@ export const AdministrativoView: React.FC<AdministrativoViewProps> = ({
               setIsFormOpen(true);
             }}
             onContratar={(adm) => setContratarAdm(adm)}
+            podeEditar={podeEditarAdmissao}
+            podeExcluir={podeExcluirAdmissao}
           onDelete={(adm) => {
               setDeleteTarget(adm);
             }}
@@ -562,6 +655,8 @@ export const AdministrativoView: React.FC<AdministrativoViewProps> = ({
             isLoading={isLoading}
           />
         </div>
+        </>
+        )}
       </div>
 
       {/* Modals */}

@@ -62,6 +62,26 @@ function normalizar(texto: string): string {
   return String(texto || '').trim().toUpperCase();
 }
 
+/**
+ * Nome com que o arquivo chega no computador de quem baixa:
+ *   ASO_FABRICIO_DE_OLIVEIRA_SILVA.pdf
+ * Sem acento, sem espaço, sem caractere que o Windows recuse.
+ */
+export function nomeParaDownload(codigoTipo: string, nomeColaborador: string, nomeArquivo: string): string {
+  const limpar = (t: string) =>
+    String(t || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')      // tira acentos
+      .replace(/[^A-Za-z0-9]+/g, '_')        // só letras, números e _
+      .replace(/^_+|_+$/g, '')
+      .toUpperCase();
+
+  const extensao = (String(nomeArquivo || '').match(/\.([A-Za-z0-9]{1,6})$/)?.[1] || 'pdf').toLowerCase();
+  const partes = [limpar(codigoTipo), limpar(nomeColaborador)].filter(Boolean);
+  const base = (partes.join('_') || 'DOCUMENTO').slice(0, 120);
+  return `${base}.${extensao}`;
+}
+
 export type StatusDoc = 'valido' | 'a_vencer' | 'vencido' | 'sem_validade';
 
 /**
@@ -87,6 +107,29 @@ export function situacaoDoDocumento(dataVencimento?: string, diasAlerta = 30): S
 /** Vale como "entregue e em dia"? Vencido não vale; a vencer ainda vale. */
 export function contaComoValido(situacao: StatusDoc): boolean {
   return situacao !== 'vencido';
+}
+
+/**
+ * Função que vale para DOCUMENTOS.
+ *
+ * Por padrão é a função do cadastro do colaborador. Se alguém escolheu uma
+ * função de documentos para ele (tela do colaborador), essa manda — sem mexer
+ * no cargo nem no cadastro.
+ */
+async function funcaoDeDocumentos(
+  sb: SupabaseClient,
+  colaborador: { id: string; funcao: string }
+): Promise<{ funcao: string; personalizada: boolean }> {
+  const { data } = await sb
+    .from('documento_colaborador_funcao')
+    .select('funcao')
+    .eq('colaborador_id', colaborador.id)
+    .maybeSingle();
+
+  const escolhida = String(data?.funcao || '').trim();
+  return escolhida
+    ? { funcao: escolhida, personalizada: true }
+    : { funcao: String(colaborador.funcao || ''), personalizada: false };
 }
 
 /** Busca as exigências da função, já resolvidas para os tipos ativos da empresa. */
@@ -158,8 +201,10 @@ router.get('/checklist/:colaboradorId', async (req: Request, res: Response) => {
     const { error: erroCatalogo } = await sb.rpc('garantir_tipos_padrao', { p_empresa_id: empresa_id });
     if (erroCatalogo) throw erroCatalogo;
 
+    const funcaoDoc = await funcaoDeDocumentos(sb, colaborador);
+
     const [{ todosOsTipos, tiposExigidos }, { data: docs, error }] = await Promise.all([
-      exigenciasDaFuncao(sb, empresa_id, colaborador.funcao),
+      exigenciasDaFuncao(sb, empresa_id, funcaoDoc.funcao),
       sb
         .from('documentos')
         .select('id, tipo, tipo_id, nome, nome_arquivo, tamanho_bytes, data_emissao, data_vencimento, status, observacoes, created_at')
@@ -228,6 +273,8 @@ router.get('/checklist/:colaboradorId', async (req: Request, res: Response) => {
       data: {
         colaborador,
         permissoes,
+        funcao_documentos: funcaoDoc.funcao,
+        funcao_documentos_personalizada: funcaoDoc.personalizada,
         checklist,
         anexados,
         catalogo: todosOsTipos.map(t => ({
@@ -251,6 +298,63 @@ router.get('/checklist/:colaboradorId', async (req: Request, res: Response) => {
         },
       },
     });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * PUT /api/documentos/funcao/:colaboradorId — escolhe a função de documentos.
+ *
+ * Body: { funcao: string }  (vazio volta a usar a função do cadastro)
+ * Não altera o cadastro do colaborador nem o cargo dele: grava só a regra
+ * de qual checklist ele segue.
+ */
+router.put('/funcao/:colaboradorId', async (req: Request, res: Response) => {
+  try {
+    const sb = getSupabase();
+    const colaborador = await buscarColaborador(req.params.colaboradorId);
+    if (!colaborador) return res.status(404).json({ success: false, error: 'Colaborador não encontrado.' });
+    if (!mesmaEmpresa(req, colaborador.empresa_id)) {
+      return res.status(403).json({ success: false, error: 'Colaborador de outra empresa.' });
+    }
+    if (!(await pode(req, 'editar'))) {
+      return res.status(403).json({ success: false, error: MENSAGEM_SEM_PERMISSAO.editar });
+    }
+
+    const funcao = normalizar(String(req.body.funcao || ''));
+
+    if (!funcao) {
+      await sb.from('documento_colaborador_funcao').delete().eq('colaborador_id', colaborador.id);
+      await registrarEventoDocumento(req, {
+        empresa_id: colaborador.empresa_id,
+        colaborador_id: colaborador.id,
+        documento_id: '',
+        acao: 'funcao_documentos',
+        detalhes: 'Voltou a usar a função do cadastro do colaborador',
+      });
+      return res.json({ success: true, data: { funcao: colaborador.funcao, personalizada: false } });
+    }
+
+    await sb.from('documento_colaborador_funcao').upsert(
+      {
+        colaborador_id: colaborador.id,
+        empresa_id: colaborador.empresa_id,
+        funcao,
+        definido_por: req.user?.nome || '',
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'colaborador_id' }
+    );
+
+    await registrarEventoDocumento(req, {
+      empresa_id: colaborador.empresa_id,
+      colaborador_id: colaborador.id,
+      documento_id: '',
+      acao: 'funcao_documentos',
+      detalhes: `Função de documentos definida como ${funcao}`,
+    });
+    res.json({ success: true, data: { funcao, personalizada: true } });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -540,7 +644,7 @@ router.get('/:id/download', async (req: Request, res: Response) => {
 
     const { data: doc, error: docError } = await supabase
       .from('documentos')
-      .select('storage_path, nome_arquivo, empresa_id')
+      .select('storage_path, nome_arquivo, empresa_id, tipo, colaborador_id')
       .eq('id', req.params.id)
       .single();
 
@@ -552,13 +656,24 @@ router.get('/:id/download', async (req: Request, res: Response) => {
       return res.status(403).json({ success: false, error: MENSAGEM_SEM_PERMISSAO.visualizar });
     }
 
+    // Nome amigável: ASO_FABRICIO_DE_OLIVEIRA_SILVA.pdf
+    const dono = await buscarColaborador(doc.colaborador_id);
+    const nomeSugerido = nomeParaDownload(doc.tipo, dono?.nome || '', doc.nome_arquivo);
+
+    // ?baixar=1 → o próprio link já força o download com o nome certo
+    const paraBaixar = String(req.query.baixar || '') === '1';
     const { data, error } = await supabase.storage
       .from('documentos')
-      .createSignedUrl(doc.storage_path, 120);
+      .createSignedUrl(doc.storage_path, 120, paraBaixar ? { download: nomeSugerido } : undefined);
 
     if (error) throw error;
 
-    res.json({ success: true, url: data.signedUrl, nome_arquivo: doc.nome_arquivo });
+    res.json({
+      success: true,
+      url: data.signedUrl,
+      nome_arquivo: doc.nome_arquivo,
+      nome_download: nomeSugerido,
+    });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }

@@ -8,6 +8,8 @@ interface DashboardProps {
   selectedEmpresa?: Empresa | null;
   onSwitchEmpresa?: () => void;
   currentUser?: { email: string; name: string; role: string };
+  /** Permissões do cargo — módulos sem "visualizar" não aparecem */
+  permissoes?: import('../../types').PermissoesUsuario | null;
 }
 
 /** Um módulo do sistema mostrado no painel */
@@ -72,10 +74,23 @@ export const Dashboard: React.FC<DashboardProps> = ({
   selectedEmpresa,
   onSwitchEmpresa,
   currentUser,
+  permissoes,
 }) => {
   const companyColor = selectedEmpresa?.corPrimaria || '#176B87';
   const theme = getCompanyTheme(companyColor);
-  const isMasterAdmin = currentUser?.email.toLowerCase() === 'fabriciooliveira2431@gmail.com';
+  const isMasterAdmin = !!permissoes?.master;
+
+  /** Quais módulos do sistema este cargo enxerga. */
+  const modulosVisiveis = MODULOS.filter(mod => {
+    if (!permissoes) return mod.emBreve === true ? true : false; // sem resposta ainda: não mostra dado
+    if (permissoes.master) return true;
+    const m = permissoes.modulos;
+    if (mod.chave === 'administrativo') {
+      return !!(m?.admissoes?.visualizar || m?.efetivo?.visualizar);
+    }
+    if (mod.chave === 'documentacoes') return !!m?.documentos?.visualizar;
+    return true; // módulos "em breve" continuam visíveis
+  });
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
@@ -186,7 +201,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           Para adicionar um módulo, basta acrescentar ao array.
          ───────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        {MODULOS.map(mod => {
+        {modulosVisiveis.map(mod => {
           const Icone = mod.icon;
           const disponivel = !mod.emBreve;
 

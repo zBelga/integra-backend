@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { queryRows, executeQuery, saveDbToDisk } from '../db.js';
 
+import { somenteMaster, MODULOS } from '../utils/permissoes.js';
 const router = Router();
 
 // GET /api/cargos - List cargos filtered by empresa_id (strict company isolation)
@@ -64,10 +65,45 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+/**
+ * Grava a matriz de um cargo. Recebe a lista vinda da tela:
+ *   [{ modulo, visualizar, criar, editar, excluir, solicitar, aprovar }]
+ * Módulo que não vier na lista fica com a linha padrão (só visualizar e
+ * solicitar), nunca com acesso aberto.
+ */
+async function gravarPermissoes(cargoId: string, empresaId: string, lista: any[]) {
+  const enviados = new Map<string, any>();
+  (Array.isArray(lista) ? lista : []).forEach(l => {
+    if (l && l.modulo) enviados.set(String(l.modulo), l);
+  });
+
+  for (const modulo of MODULOS) {
+    const p = enviados.get(modulo) || {};
+    const flag = (v: any, padrao = false) => (v === undefined ? (padrao ? 1 : 0) : v ? 1 : 0);
+    await executeQuery(
+      `INSERT OR REPLACE INTO cargos_permissoes
+       (id, empresa_id, cargo_id, modulo, visualizar, criar, editar, excluir, solicitar, aprovar, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      [
+        `prm-${cargoId}-${modulo}`,
+        empresaId,
+        cargoId,
+        modulo,
+        flag(p.visualizar, true),
+        flag(p.criar),
+        flag(p.editar),
+        flag(p.excluir),
+        flag(p.solicitar, true),
+        flag(p.aprovar),
+      ]
+    );
+  }
+}
+
 // POST /api/cargos - Create new cargo for a company
-router.post('/', async (req, res) => {
+router.post('/', somenteMaster, async (req, res) => {
   try {
-    const { empresa_id, nome, descricao, status } = req.body;
+    const { empresa_id, nome, descricao, status, permissoes } = req.body;
 
     if (!empresa_id) {
       return res.status(400).json({
@@ -107,12 +143,20 @@ router.post('/', async (req, res) => {
       [newId, empresa_id, trimmedNome, descricao?.trim() || '', cargoStatus]
     );
 
+    // O cargo já nasce com a matriz definida na própria tela de criação
+    await gravarPermissoes(newId, empresa_id, permissoes);
+    await saveDbToDisk();
+
     const created = await queryRows('SELECT * FROM cargos WHERE id = ?', [newId]);
+    const matriz = await queryRows(
+      'SELECT * FROM cargos_permissoes WHERE cargo_id = ? ORDER BY modulo ASC',
+      [newId]
+    );
 
     res.status(201).json({
       success: true,
       message: 'Cargo criado com sucesso!',
-      data: created[0],
+      data: { ...created[0], permissoes: matriz },
     });
   } catch (error: any) {
     console.error('Erro ao criar cargo:', error);
@@ -124,7 +168,7 @@ router.post('/', async (req, res) => {
 });
 
 // PUT /api/cargos/:id - Update cargo
-router.put('/:id', async (req, res) => {
+router.put('/:id', somenteMaster, async (req, res) => {
   try {
     const { id } = req.params;
     const { nome, descricao, status, empresa_id } = req.body;
@@ -196,7 +240,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // PATCH /api/cargos/:id/status - Toggle active/inactive status
-router.patch('/:id/status', async (req, res) => {
+router.patch('/:id/status', somenteMaster, async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
@@ -238,7 +282,7 @@ router.patch('/:id/status', async (req, res) => {
 });
 
 // DELETE /api/cargos/:id - Delete cargo
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', somenteMaster, async (req, res) => {
   try {
     const { id } = req.params;
 

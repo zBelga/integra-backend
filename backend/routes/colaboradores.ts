@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { queryRows, executeQuery } from '../db.js';
+import { exigir } from '../utils/permissoes.js';
 
 const router = Router();
 
@@ -65,7 +66,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 });
 
 // PUT /api/colaboradores/:id
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', exigir('efetivo', 'editar'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { nome, funcao, rg, numero_chapa, obra_id, data_admissao, data_aso } = req.body;

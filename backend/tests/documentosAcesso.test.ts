@@ -41,10 +41,11 @@ async function main() {
   confere('registro sem empresa não vaza', mesmaEmpresa(enc, ''), false);
 
   console.log('\n— Permissões (matriz por cargo, módulo documentos)');
-  confere('gestor de RH: tudo', await permissoesDocumentos(gestor), { visualizar: true, criar: true, editar: true, excluir: true });
-  confere('encarregado: conforme a matriz', await permissoesDocumentos(enc), { visualizar: true, criar: true, editar: true, excluir: false });
-  confere('auxiliar sem linha na matriz: só ver', await permissoesDocumentos(aux), { visualizar: true, criar: false, editar: false, excluir: false });
-  confere('usuário sem cargo: só ver', await permissoesDocumentos(sem), { visualizar: true, criar: false, editar: false, excluir: false });
+  confere('master: tudo', await permissoesDocumentos(master), { visualizar: true, criar: true, editar: true, excluir: true, solicitar: true, aprovar: true });
+  confere('gestor de RH sem linha na matriz: só ver (o cargo manda)', await permissoesDocumentos(gestor), { visualizar: true, criar: false, editar: false, excluir: false, solicitar: true, aprovar: false });
+  confere('encarregado: conforme a matriz', await permissoesDocumentos(enc), { visualizar: true, criar: true, editar: true, excluir: false, solicitar: true, aprovar: false });
+  confere('auxiliar sem linha na matriz: só ver', await permissoesDocumentos(aux), { visualizar: true, criar: false, editar: false, excluir: false, solicitar: true, aprovar: false });
+  confere('usuário sem cargo: só ver', await permissoesDocumentos(sem), { visualizar: true, criar: false, editar: false, excluir: false, solicitar: true, aprovar: false });
   confere('encarregado não exclui', await pode(enc, 'excluir'), false);
   confere('auxiliar não anexa', await pode(aux, 'criar'), false);
 

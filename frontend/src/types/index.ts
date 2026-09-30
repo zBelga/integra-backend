@@ -90,6 +90,18 @@ export type ChaveModulo = 'administrativo' | 'documentacoes' | 'seguranca' | 'al
  * Usuario autenticado na sessao.
  * `perfil` e `permissoes` vem do login e decidem o que aparece no menu.
  */
+/** Permissões do usuário logado, por módulo (vem de /api/auth/permissoes) */
+export type AcaoPermissao = 'visualizar' | 'criar' | 'editar' | 'excluir' | 'solicitar' | 'aprovar';
+export type ModuloPermissao =
+  | 'efetivo' | 'admissoes' | 'obras' | 'rh' | 'documentos' | 'relatorios' | 'usuarios';
+
+export interface PermissoesUsuario {
+  master: boolean;
+  perfil: string;
+  empresa_id: string;
+  modulos: Record<ModuloPermissao, Record<AcaoPermissao, boolean>>;
+}
+
 export interface UsuarioSessao {
   email: string;
   name: string;
@@ -201,6 +213,16 @@ export interface CargoFormData {
   nome: string;
   descricao?: string;
   status?: 'ativo' | 'inativo';
+  /** Matriz definida já na criação do cargo */
+  permissoes?: Array<{
+    modulo: string;
+    visualizar: boolean;
+    criar: boolean;
+    editar: boolean;
+    excluir: boolean;
+    solicitar: boolean;
+    aprovar: boolean;
+  }>;
 }
 
 export interface UsuarioSistema {
@@ -248,8 +270,16 @@ export interface Colaborador {
   obra_codigo?: string;
   data_admissao: string;
   data_aso?: string;
+  /** Dia em que a admissão foi marcada como contratada (AAAA-MM-DD) */
+  contratado_em?: string;
   created_at?: string;
   updated_at?: string;
+}
+
+/** Um dia com contratações — vira uma aba em Admissões */
+export interface DiaDeContratacao {
+  data: string;
+  total: number;
 }
 
 // ─── Gestão de documentos ────────────────────────────────────────────────────
@@ -342,6 +372,9 @@ export interface ChecklistColaborador {
   anexados: Documento[];
   catalogo: Array<Pick<DocumentoTipo, 'id' | 'codigo' | 'nome' | 'descricao' | 'tem_validade' | 'validade_meses' | 'dias_alerta'>>;
   indicadores: IndicadoresDocumentos;
+  /** Função que vale para o checklist (pode ser diferente do cargo) */
+  funcao_documentos?: string;
+  funcao_documentos_personalizada?: boolean;
 }
 
 /** Uma função/cargo existente no sistema, para a matriz de exigências */
@@ -349,6 +382,8 @@ export interface FuncaoEmpresa {
   chave: string;
   nome: string;
   colaboradores: number;
+  /** Criada só para documentos (não é cargo do sistema) */
+  personalizada?: boolean;
 }
 
 export interface Documento {

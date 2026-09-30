@@ -9,6 +9,9 @@ interface AdmissaoTableProps {
   onEdit: (admissao: Admissao) => void;
   onDelete: (admissao: Admissao) => void;
   onContratar: (admissao: Admissao) => void;
+  /** Ações liberadas pelo cargo */
+  podeEditar?: boolean;
+  podeExcluir?: boolean;
 }
 
 export const AdmissaoTable: React.FC<AdmissaoTableProps> = ({
@@ -17,6 +20,8 @@ export const AdmissaoTable: React.FC<AdmissaoTableProps> = ({
   onEdit,
   onDelete,
   onContratar,
+  podeEditar = true,
+  podeExcluir = true,
 }) => {
   if (isLoading) {
     return (
@@ -120,27 +125,27 @@ export const AdmissaoTable: React.FC<AdmissaoTableProps> = ({
               {/* Ações */}
               <td className="py-2.5 px-2.5 text-center whitespace-nowrap">
                 <div className="flex items-center justify-center space-x-1.5">
-                  <button
+                  {podeEditar && (<button
                     onClick={() => onEdit(adm)}
                     className="p-1 text-[#687582] hover:text-[#176B87] hover:bg-[#E8F3F6] rounded-md transition-colors cursor-pointer"
                     title="Editar Admissão"
                   >
                     <Edit2 className="w-3.5 h-3.5" />
-                  </button>
-                  <button
+                  </button>)}
+                  {podeExcluir && (<button
                     onClick={() => onDelete(adm)}
                     className="p-1 text-[#687582] hover:text-[#D64550] hover:bg-[#FDEBEC] rounded-md transition-colors cursor-pointer"
                     title="Excluir Admissão"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                  <button
+                  </button>)}
+                  {podeEditar && (<button
                     onClick={() => onContratar(adm)}
                     className="p-1 text-[#687582] hover:text-[#159A72] hover:bg-[#E8F6F1] rounded-md transition-colors cursor-pointer"
                     title="Contratar — mover para Efetivo"
                   >
                     <CheckCircle2 className="w-3.5 h-3.5" />
-                  </button>
+                  </button>)}
                 </div>
               </td>
             </tr>
