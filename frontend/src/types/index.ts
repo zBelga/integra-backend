@@ -90,17 +90,50 @@ export type ChaveModulo = 'administrativo' | 'documentacoes' | 'seguranca' | 'al
  * Usuario autenticado na sessao.
  * `perfil` e `permissoes` vem do login e decidem o que aparece no menu.
  */
-/** Permissões do usuário logado, por módulo (vem de /api/auth/permissoes) */
-export type AcaoPermissao = 'visualizar' | 'criar' | 'editar' | 'excluir' | 'solicitar' | 'aprovar';
-export type ModuloPermissao =
-  | 'efetivo' | 'admissoes' | 'obras' | 'rh' | 'documentos' | 'relatorios' | 'usuarios';
+/** Permissões do usuário logado (vem de /api/auth/permissoes) */
+export type AcaoTela = 'ver' | 'criar' | 'editar' | 'excluir';
+
+export interface PermissaoTela {
+  ver: boolean;
+  criar: boolean;
+  editar: boolean;
+  excluir: boolean;
+  extras: Record<string, boolean>;
+}
 
 export interface PermissoesUsuario {
   master: boolean;
   perfil: string;
   empresa_id: string;
-  modulos: Record<ModuloPermissao, Record<AcaoPermissao, boolean>>;
+  /** modulos['documentacao'].telas['documentos'].criar */
+  modulos: Record<string, { algumAcesso: boolean; telas: Record<string, PermissaoTela> }>;
 }
+
+/** Catálogo de módulos e telas (GET /api/permissoes/catalogo) */
+export interface ExtraTelaInfo {
+  id: string;
+  nome: string;
+  descricao: string;
+}
+
+export interface TelaCatalogo {
+  id: string;
+  nome: string;
+  descricao: string;
+  extras: ExtraTelaInfo[];
+  semAcoes?: AcaoTela[];
+}
+
+export interface ModuloCatalogo {
+  id: string;
+  nome: string;
+  descricao: string;
+  telas: TelaCatalogo[];
+  emBreve?: boolean;
+}
+
+/** Mapa salvo por cargo: { 'modulo.tela': permissão } */
+export type MapaTelas = Record<string, PermissaoTela>;
 
 export interface UsuarioSessao {
   email: string;
@@ -213,16 +246,8 @@ export interface CargoFormData {
   nome: string;
   descricao?: string;
   status?: 'ativo' | 'inativo';
-  /** Matriz definida já na criação do cargo */
-  permissoes?: Array<{
-    modulo: string;
-    visualizar: boolean;
-    criar: boolean;
-    editar: boolean;
-    excluir: boolean;
-    solicitar: boolean;
-    aprovar: boolean;
-  }>;
+  /** Permissões definidas já na criação do cargo, tela por tela */
+  telas?: MapaTelas;
 }
 
 export interface UsuarioSistema {
@@ -348,6 +373,9 @@ export interface PermissoesDocumentos {
   criar: boolean;
   editar: boolean;
   excluir: boolean;
+  /** Ações especiais da tela (catálogo de permissões) */
+  baixar?: boolean;
+  restaurar?: boolean;
 }
 
 export interface EventoHistorico {

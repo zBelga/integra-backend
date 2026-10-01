@@ -7,7 +7,7 @@ const router = Router();
 const MASTER_EMAIL = 'fabriciooliveira2431@gmail.com';
 
 // GET /api/usuarios - List all system users with company binding details
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', somenteMaster, async (req: Request, res: Response) => {
   try {
     const search = ((req.query.search as string) || '').trim();
     const empresaId = ((req.query.empresa_id as string) || '').trim();

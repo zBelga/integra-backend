@@ -208,6 +208,27 @@ async function getDbSqlite(): Promise<Database> {
     `);
   } catch {}
 
+  // Permissões por tela (modelo novo: módulo → tela → ações)
+  try {
+    db.run(`
+      CREATE TABLE IF NOT EXISTS cargos_telas (
+        id TEXT PRIMARY KEY,
+        empresa_id TEXT NOT NULL,
+        cargo_id TEXT NOT NULL,
+        modulo TEXT NOT NULL,
+        tela TEXT NOT NULL,
+        ver INTEGER DEFAULT 0,
+        criar INTEGER DEFAULT 0,
+        editar INTEGER DEFAULT 0,
+        excluir INTEGER DEFAULT 0,
+        extras TEXT DEFAULT '{}',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(cargo_id, modulo, tela)
+      );
+    `);
+  } catch {}
+
   // Ensure new columns exist for existing tables
   try {
     db.run("ALTER TABLE usuarios ADD COLUMN cargo_id TEXT DEFAULT ''");

@@ -11,7 +11,7 @@
 import { Router, Request, Response } from 'express';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { queryRows } from '../db.js';
-import { pode } from '../utils/documentosAcesso.js';
+import { podeNaTela, exigirAlgumaTela } from '../utils/permissoes.js';
 
 const router = Router();
 
@@ -35,7 +35,21 @@ function empresaDoPedido(req: Request): string {
  * permissão de EDITAR no módulo Documentação (Permissões por Cargo).
  */
 async function podeGerenciar(req: Request): Promise<boolean> {
-  return pode(req, 'editar');
+  // Catálogo de tipos e exigências por função são telas próprias do módulo
+  return (
+    (await podeNaTela(req, 'documentacao.tipos', 'editar')) ||
+    (await podeNaTela(req, 'documentacao.porFuncao', 'editar'))
+  );
+}
+
+/** Só quem edita o catálogo de tipos. */
+async function podeTipos(req: Request): Promise<boolean> {
+  return podeNaTela(req, 'documentacao.tipos', 'editar');
+}
+
+/** Só quem edita as exigências por função. */
+async function podeExigencias(req: Request): Promise<boolean> {
+  return podeNaTela(req, 'documentacao.porFuncao', 'editar');
 }
 function bloqueado(res: Response) {
   return res
@@ -157,7 +171,7 @@ router.get('/meta/funcoes', async (req: Request, res: Response) => {
  */
 router.post('/meta/funcoes', async (req: Request, res: Response) => {
   try {
-    if (!(await podeGerenciar(req))) return bloqueado(res);
+    if (!(await podeExigencias(req))) return bloqueado(res);
 
     const empresa_id = empresaDoPedido(req);
     const nome = String(req.body.nome || '').trim().replace(/\s+/g, ' ');
@@ -217,7 +231,7 @@ router.post('/meta/funcoes', async (req: Request, res: Response) => {
  */
 router.delete('/meta/funcoes/:chave', async (req: Request, res: Response) => {
   try {
-    if (!(await podeGerenciar(req))) return bloqueado(res);
+    if (!(await podeExigencias(req))) return bloqueado(res);
 
     const empresa_id = empresaDoPedido(req);
     const chave = normalizar(req.params.chave);
@@ -289,7 +303,7 @@ router.get('/exigencias/lista', async (req: Request, res: Response) => {
  */
 router.put('/exigencias', async (req: Request, res: Response) => {
   try {
-    if (!(await podeGerenciar(req))) return bloqueado(res);
+    if (!(await podeExigencias(req))) return bloqueado(res);
 
     const empresa_id = empresaDoPedido(req);
     const funcao = normalizar(req.body.funcao);
@@ -383,7 +397,7 @@ router.get('/exigencias/resumo', async (req: Request, res: Response) => {
  * Lista o catálogo da empresa ativa. Na primeira chamada garante os 8 padrões
  * (função SQL idempotente — nunca duplica, nunca sobrescreve edições).
  */
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', exigirAlgumaTela(['documentacao.documentos', 'documentacao.tipos', 'documentacao.porFuncao']), async (req: Request, res: Response) => {
   try {
     const empresa_id = empresaDoPedido(req);
     if (!empresa_id) return res.status(400).json({ success: false, error: 'Empresa não identificada.' });
@@ -407,7 +421,7 @@ router.get('/', async (req: Request, res: Response) => {
 /** POST /api/documento-tipos — cria um tipo novo no catálogo da empresa */
 router.post('/', async (req: Request, res: Response) => {
   try {
-    if (!(await podeGerenciar(req))) return bloqueado(res);
+    if (!(await podeTipos(req))) return bloqueado(res);
 
     const empresa_id = empresaDoPedido(req);
     const nome = String(req.body.nome || '').trim();
@@ -473,7 +487,7 @@ router.post('/', async (req: Request, res: Response) => {
 /** PUT /api/documento-tipos/:id — edita (inclusive os 8 padrão) */
 router.put('/:id', async (req: Request, res: Response) => {
   try {
-    if (!(await podeGerenciar(req))) return bloqueado(res);
+    if (!(await podeTipos(req))) return bloqueado(res);
 
     const empresa_id = empresaDoPedido(req);
     const sb = getSupabase();
@@ -563,7 +577,7 @@ router.put('/:id', async (req: Request, res: Response) => {
  */
 router.patch('/:id/status', async (req: Request, res: Response) => {
   try {
-    if (!(await podeGerenciar(req))) return bloqueado(res);
+    if (!(await podeTipos(req))) return bloqueado(res);
 
     const status = req.body.status === 'ativo' ? 'ativo' : 'inativo';
     const empresa_id = empresaDoPedido(req);

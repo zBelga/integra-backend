@@ -2,10 +2,11 @@ import { Router, Request, Response } from 'express';
 import { queryRows, executeQuery, saveDbToDisk } from '../db.js';
 
 import { somenteMaster } from '../utils/permissoes.js';
+import { CATALOGO, ACOES_TELA, todasAsChaves, buscarTela } from '../utils/catalogoPermissoes.js';
 const router = Router();
 
 // GET /api/permissoes - List permissions by empresa_id and/or cargo_id
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', somenteMaster, async (req: Request, res: Response) => {
   try {
     const { empresa_id, cargo_id } = req.query;
 
@@ -61,7 +62,7 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // GET /api/permissoes/cargo/:cargo_id - Get permissions matrix for a single cargo
-router.get('/cargo/:cargo_id', async (req: Request, res: Response) => {
+router.get('/cargo/:cargo_id', somenteMaster, async (req: Request, res: Response) => {
   try {
     const { cargo_id } = req.params;
     const { empresa_id } = req.query;
@@ -192,8 +193,117 @@ router.put('/cargo/:cargo_id', somenteMaster, async (req: Request, res: Response
   }
 });
 
+/**
+ * GET /api/permissoes/catalogo
+ * A lista de módulos, telas e ações especiais do sistema. A tela de
+ * configuração é desenhada a partir daqui, então tela nova aparece sozinha.
+ */
+router.get('/catalogo', async (_req: Request, res: Response) => {
+  res.json({ success: true, data: { modulos: CATALOGO, acoes: ACOES_TELA } });
+});
+
+/**
+ * GET /api/permissoes/cargo/:cargo_id/telas
+ * Permissões do cargo no modelo novo (módulo → tela → ações). Cargo que ainda
+ * não foi salvo neste formato vem traduzido da matriz antiga.
+ */
+router.get('/cargo/:cargo_id/telas', somenteMaster, async (req: Request, res: Response) => {
+  try {
+    const cargoId = req.params.cargo_id;
+    const linhas = (await queryRows(
+      'SELECT modulo, tela, ver, criar, editar, excluir, extras FROM cargos_telas WHERE cargo_id = ?',
+      [cargoId]
+    )) as any[];
+
+    const mapa: Record<string, any> = {};
+    linhas.forEach(l => {
+      let extras: Record<string, boolean> = {};
+      try { extras = JSON.parse(String(l.extras || '{}')); } catch { extras = {}; }
+      mapa[`${l.modulo}.${l.tela}`] = {
+        ver: !!Number(l.ver),
+        criar: !!Number(l.criar),
+        editar: !!Number(l.editar),
+        excluir: !!Number(l.excluir),
+        extras,
+      };
+    });
+
+    // Cargo que ainda não foi salvo no formato novo: mostra o que a matriz
+    // antiga já liberava, para o master não abrir a tela em branco.
+    if (linhas.length === 0) {
+      const { telasDaMatrizAntiga } = await import('../utils/permissoes.js');
+      const antigo = await telasDaMatrizAntiga(cargoId);
+      return res.json({ success: true, data: { telas: antigo, migrado: false } });
+    }
+
+    res.json({ success: true, data: { telas: mapa, migrado: true } });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message || 'Erro ao carregar permissões do cargo.' });
+  }
+});
+
+/**
+ * PUT /api/permissoes/cargo/:cargo_id/telas
+ * Grava a árvore inteira do cargo. Body: { empresa_id, telas: { 'modulo.tela': {...} } }
+ * Só mexe em regra: nenhum registro, arquivo ou usuário é tocado.
+ */
+router.put('/cargo/:cargo_id/telas', somenteMaster, async (req: Request, res: Response) => {
+  try {
+    const cargoId = req.params.cargo_id;
+    const enviado = (req.body && req.body.telas) || {};
+
+    const cargoRows = await queryRows('SELECT * FROM cargos WHERE id = ?', [cargoId]);
+    if (cargoRows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Cargo não encontrado.' });
+    }
+    const empresaId = req.body.empresa_id || cargoRows[0].empresa_id;
+
+    for (const chave of todasAsChaves()) {
+      const [modulo, tela] = chave.split('.');
+      const info = buscarTela(chave);
+      const p = enviado[chave] || {};
+      const ver = p.ver ? 1 : 0;
+      // Sem "ver" nada mais vale, e ação especial exige a tela aberta
+      const extrasLimpos: Record<string, boolean> = {};
+      (info?.tela.extras || []).forEach(e => {
+        extrasLimpos[e.id] = !!(ver && p.extras && p.extras[e.id]);
+      });
+
+      await executeQuery(
+        `INSERT OR REPLACE INTO cargos_telas
+         (id, empresa_id, cargo_id, modulo, tela, ver, criar, editar, excluir, extras, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+        [
+          `tela-${cargoId}-${modulo}-${tela}`,
+          empresaId,
+          cargoId,
+          modulo,
+          tela,
+          ver,
+          ver && p.criar ? 1 : 0,
+          ver && p.editar ? 1 : 0,
+          ver && p.excluir ? 1 : 0,
+          JSON.stringify(extrasLimpos),
+        ]
+      );
+    }
+
+    await saveDbToDisk();
+
+    const telas = (await queryRows(
+      'SELECT modulo, tela, ver, criar, editar, excluir, extras FROM cargos_telas WHERE cargo_id = ?',
+      [cargoId]
+    )) as any[];
+
+    res.json({ success: true, message: 'Permissões salvas.', data: { total: telas.length } });
+  } catch (error: any) {
+    console.error('Erro ao salvar permissões por tela:', error);
+    res.status(500).json({ success: false, error: error.message || 'Erro ao salvar permissões do cargo.' });
+  }
+});
+
 // GET /api/permissoes/check - Verify if cargo/user has permission for specific action in module
-router.get('/check', async (req: Request, res: Response) => {
+router.get('/check', somenteMaster, async (req: Request, res: Response) => {
   try {
     const { cargo_id, modulo, acao } = req.query;
 

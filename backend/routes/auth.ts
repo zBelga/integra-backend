@@ -89,17 +89,9 @@ router.post('/login', async (req: Request, res: Response) => {
  */
 router.get('/permissoes', requireAuth, async (req: Request, res: Response) => {
   try {
-    const { permissoesDoUsuario, ehMaster } = await import('../utils/permissoes.js');
-    const permissoes = await permissoesDoUsuario(req);
-    res.json({
-      success: true,
-      data: {
-        master: ehMaster(req),
-        perfil: req.user?.perfil || '',
-        empresa_id: req.user?.empresa_id || '',
-        modulos: permissoes,
-      },
-    });
+    const { permissoesDoUsuario } = await import('../utils/permissoes.js');
+    // Já vem { master, perfil, empresa_id, modulos } — não embrulhar de novo.
+    res.json({ success: true, data: await permissoesDoUsuario(req) });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }

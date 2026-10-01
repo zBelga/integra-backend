@@ -14,9 +14,18 @@
  * matriz. Cargo sem linha configurada fica no padrão: só visualizar.
  */
 import { Request } from 'express';
-import { permissoesDoModulo, ehMaster as ehMasterGeral, mesmaEmpresa as mesmaEmpresaGeral } from './permissoes.js';
+import { permissaoDaTela, podeExtra as podeExtraGeral, ehMaster as ehMasterGeral, mesmaEmpresa as mesmaEmpresaGeral } from './permissoes.js';
+
+/** A tela do sistema a que estas regras se referem. */
+export const TELA_DOCUMENTOS = 'documentacao.documentos';
 
 export type AcaoDocumento = 'visualizar' | 'criar' | 'editar' | 'excluir';
+
+/** O que a tela de documentos recebe: as 4 ações + as ações especiais. */
+export interface PermissoesDocumentosTela extends Record<AcaoDocumento, boolean> {
+  baixar: boolean;
+  restaurar: boolean;
+}
 
 export function ehMaster(req: Request): boolean {
   return ehMasterGeral(req);
@@ -28,9 +37,27 @@ export async function ehGestaoDocumentos(req: Request): Promise<boolean> {
   return p.editar;
 }
 
-/** Permissões de documentos do usuário logado, lidas da matriz por cargo. */
-export async function permissoesDocumentos(req: Request): Promise<Record<AcaoDocumento, boolean>> {
-  return permissoesDoModulo(req, 'documentos');
+/** Permissões de documentos do usuário logado, lidas do cargo. */
+export async function permissoesDocumentos(req: Request): Promise<PermissoesDocumentosTela> {
+  const p = await permissaoDaTela(req, TELA_DOCUMENTOS);
+  const extras: any = (p as any).extras || {};
+  return {
+    visualizar: p.ver,
+    criar: p.ver && p.criar,
+    editar: p.ver && p.editar,
+    excluir: p.ver && p.excluir,
+    baixar: p.ver && !!extras.baixar,
+    restaurar: p.ver && !!extras.restaurar,
+  };
+}
+
+/** Ações especiais da tela de documentos: baixar arquivo e restaurar excluído. */
+export async function podeBaixar(req: Request): Promise<boolean> {
+  return podeExtraGeral(req, TELA_DOCUMENTOS, 'baixar');
+}
+
+export async function podeRestaurar(req: Request): Promise<boolean> {
+  return podeExtraGeral(req, TELA_DOCUMENTOS, 'restaurar');
 }
 
 export async function pode(req: Request, acao: AcaoDocumento): Promise<boolean> {

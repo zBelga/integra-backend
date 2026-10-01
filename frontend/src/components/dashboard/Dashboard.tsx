@@ -2,6 +2,7 @@ import React from 'react';
 import { ArrowRight, Lock, RefreshCw, Crown, ShieldCheck, Sliders, FolderOpen, HardHat, Package } from 'lucide-react';
 import { ActiveView, ChaveModulo, Empresa } from '../../types';
 import { getCompanyTheme } from '../../utils/theme';
+import { moduloVisivel, podeNaTela } from '../../utils/permissoes';
 
 interface DashboardProps {
   onSelectModule: (view: ActiveView) => void;
@@ -23,8 +24,8 @@ interface ModuloCard {
   cor: string;
   bg: string;
   borda: string;
-  /** Telas que aparecem na lateral depois de entrar */
-  telas: string[];
+  /** Telas que aparecem na lateral depois de entrar (com a chave de permissão) */
+  telas: Array<{ nome: string; chave: string }>;
   emBreve?: boolean;
 }
 
@@ -36,7 +37,11 @@ const MODULOS: ModuloCard[] = [
     descricao: 'Admissões, quadro de efetivo e alocação de colaboradores em obras.',
     icon: Sliders,
     cor: '#176B87', bg: '#E8F3F6', borda: '#C6E3EB',
-    telas: ['Admissões', 'Efetivo Geral', 'Efetivo por Obra'],
+    telas: [
+      { nome: 'Admissões', chave: 'administrativo.admissoes' },
+      { nome: 'Efetivo Geral', chave: 'administrativo.efetivo' },
+      { nome: 'Efetivo por Obra', chave: 'administrativo.efetivoObra' },
+    ],
   },
   {
     chave: 'documentacoes',
@@ -45,7 +50,11 @@ const MODULOS: ModuloCard[] = [
     descricao: 'Documentos por colaborador, vencimentos e exigências por função.',
     icon: FolderOpen,
     cor: '#7C3AED', bg: '#EDE9FE', borda: '#DDD6FE',
-    telas: ['Documentos', 'Tipos de Documentos', 'Documentos por Função'],
+    telas: [
+      { nome: 'Documentos', chave: 'documentacao.documentos' },
+      { nome: 'Tipos de Documentos', chave: 'documentacao.tipos' },
+      { nome: 'Documentos por Função', chave: 'documentacao.porFuncao' },
+    ],
   },
   {
     chave: 'seguranca',
@@ -81,14 +90,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const isMasterAdmin = !!permissoes?.master;
 
   /** Quais módulos do sistema este cargo enxerga. */
+  /** Só lista as telas do módulo que o cargo enxerga. */
+  const telasDoCard = (mod: ModuloCard) =>
+    permissoes?.master
+      ? mod.telas
+      : mod.telas.filter(t => podeNaTela(permissoes, t.chave, 'ver'));
+
   const modulosVisiveis = MODULOS.filter(mod => {
     if (!permissoes) return mod.emBreve === true ? true : false; // sem resposta ainda: não mostra dado
     if (permissoes.master) return true;
-    const m = permissoes.modulos;
-    if (mod.chave === 'administrativo') {
-      return !!(m?.admissoes?.visualizar || m?.efetivo?.visualizar);
-    }
-    if (mod.chave === 'documentacoes') return !!m?.documentos?.visualizar;
+    if (mod.chave === 'administrativo') return moduloVisivel(permissoes, 'administrativo');
+    if (mod.chave === 'documentacoes') return moduloVisivel(permissoes, 'documentacao');
     return true; // módulos "em breve" continuam visíveis
   });
 
@@ -263,15 +275,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 </p>
 
                 {/* O que tem dentro do módulo */}
-                {disponivel && mod.telas.length > 0 && (
+                {disponivel && telasDoCard(mod).length > 0 && (
                   <ul className="mt-4 space-y-1.5">
-                    {mod.telas.map(tela => (
-                      <li key={tela} className="flex items-center gap-2 text-[11px] text-[#687582]">
+                    {telasDoCard(mod).map(tela => (
+                      <li key={tela.chave} className="flex items-center gap-2 text-[11px] text-[#687582]">
                         <span
                           className="w-1 h-1 rounded-full shrink-0"
                           style={{ backgroundColor: mod.cor }}
                         />
-                        {tela}
+                        {tela.nome}
                       </li>
                     ))}
                   </ul>

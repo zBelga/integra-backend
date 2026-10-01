@@ -18,6 +18,7 @@ import {
   ListChecks,
 } from 'lucide-react';
 import { ActiveView, ChaveModulo, Empresa, UsuarioSessao } from '../../types';
+import { podeNaTela } from '../../utils/permissoes';
 import { getCompanyTheme } from '../../utils/theme';
 
 interface LeftSidebarProps {
@@ -45,6 +46,8 @@ interface ItemNav {
   emBreve?: boolean;
   /** Só para quem pode configurar (master, administrador, gestor de RH) */
   somenteGestao?: boolean;
+  /** Chave 'modulo.tela' do catálogo de permissões: sem "ver", o item não aparece */
+  tela?: string;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -58,9 +61,9 @@ const MODULOS: Record<ChaveModulo, { titulo: string; itens: ItemNav[] }> = {
   administrativo: {
     titulo: 'Administrativo',
     itens: [
-      { view: 'administrativo', label: 'Admissões',       icon: Sliders, titulo: 'Admissões' },
-      { view: 'efetivo',        label: 'Efetivo Geral',   icon: Users,   titulo: 'Quadro geral de efetivo' },
-      { view: 'efetivo-obra',   label: 'Efetivo por Obra', icon: HardHat, titulo: 'Efetivo agrupado por obra', emBreve: true },
+      { view: 'administrativo', label: 'Admissões',       icon: Sliders, titulo: 'Admissões', tela: 'administrativo.admissoes' },
+      { view: 'efetivo',        label: 'Efetivo Geral',   icon: Users,   titulo: 'Quadro geral de efetivo', tela: 'administrativo.efetivo' },
+      { view: 'efetivo-obra',   label: 'Efetivo por Obra', icon: HardHat, titulo: 'Efetivo agrupado por obra', emBreve: true, tela: 'administrativo.efetivoObra' },
     ],
   },
   documentacoes: {
@@ -72,20 +75,21 @@ const MODULOS: Record<ChaveModulo, { titulo: string; itens: ItemNav[] }> = {
         icon: FolderOpen,
         tambemAtivoEm: ['colaborador-perfil'],
         titulo: 'Documentos dos Colaboradores',
+        tela: 'documentacao.documentos',
       },
       {
         view: 'documento-tipos',
         label: 'Tipos de Documentos',
         icon: Settings2,
         titulo: 'Catálogo de tipos de documento da empresa',
-        somenteGestao: true,
+        tela: 'documentacao.tipos',
       },
       {
         view: 'documentos-funcao',
         label: 'Documentos por Função',
         icon: ListChecks,
         titulo: 'Quais documentos cada função precisa entregar',
-        somenteGestao: true,
+        tela: 'documentacao.porFuncao',
       },
     ],
   },
@@ -123,20 +127,6 @@ export function ehMaster(u?: UsuarioSessao): boolean {
  * Solicitações é liberado por permissão de cargo — encarregados enxergam,
  * os demais não. O master vê sempre.
  */
-/** Quem configura o catálogo de documentos e as exigências por função. */
-const PERFIS_GESTAO = ['master_admin', 'administrador', 'gestor_rh'];
-export function podeConfigurarDocumentos(u?: UsuarioSessao): boolean {
-  if (!u) return false;
-  if (ehMaster(u)) return true;
-  return PERFIS_GESTAO.includes(String(u.perfil || ''));
-}
-
-export function podeVerSolicitacoes(u?: UsuarioSessao): boolean {
-  if (!u) return false;
-  if (ehMaster(u)) return true;
-  return Array.isArray(u.permissoes) && u.permissoes.includes('solicitacoes');
-}
-
 export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   currentView,
   onNavigate,
@@ -154,22 +144,18 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
 
   const moduloAberto = MODULO_DA_VIEW[currentView];
   const modulo = moduloAberto ? MODULOS[moduloAberto] : null;
-  // Telas de configuração só aparecem para quem pode configurar
-  const podeConfigurar = permissoes
-    ? permissoes.master || !!permissoes.modulos?.documentos?.editar
-    : false;
-  const itensDoModulo = (modulo?.itens || []).filter(
-    item => !item.somenteGestao || podeConfigurar
-  );
+  // Cada tela aparece só se o cargo tem "ver" nela (o master vê tudo)
+  const itensDoModulo = (modulo?.itens || []).filter(item => {
+    if (!item.tela) return true;
+    if (!permissoes) return false;
+    return podeNaTela(permissoes, item.tela, 'ver');
+  });
 
   // O que vale é a resposta do servidor; sem ela, nada de Painel Master
   const master = permissoes ? permissoes.master : false;
   // Solicitações aparece para quem pede ou aprova alguma coisa, pela matriz
   const verSolicitacoes = permissoes
-    ? permissoes.master ||
-      Object.values(permissoes.modulos || {}).some(
-        (m: any) => m && (m.solicitar || m.aprovar)
-      )
+    ? permissoes.master || podeNaTela(permissoes, 'aprovacoes.solicitacoes', 'ver')
     : false;
 
   const handleNavClick = (view: ActiveView) => {

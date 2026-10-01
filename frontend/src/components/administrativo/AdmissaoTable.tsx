@@ -12,6 +12,7 @@ interface AdmissaoTableProps {
   /** Ações liberadas pelo cargo */
   podeEditar?: boolean;
   podeExcluir?: boolean;
+  podeContratar?: boolean;
 }
 
 export const AdmissaoTable: React.FC<AdmissaoTableProps> = ({
@@ -22,6 +23,7 @@ export const AdmissaoTable: React.FC<AdmissaoTableProps> = ({
   onContratar,
   podeEditar = true,
   podeExcluir = true,
+  podeContratar = true,
 }) => {
   if (isLoading) {
     return (
@@ -139,7 +141,7 @@ export const AdmissaoTable: React.FC<AdmissaoTableProps> = ({
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>)}
-                  {podeEditar && (<button
+                  {podeContratar && (<button
                     onClick={() => onContratar(adm)}
                     className="p-1 text-[#687582] hover:text-[#159A72] hover:bg-[#E8F6F1] rounded-md transition-colors cursor-pointer"
                     title="Contratar — mover para Efetivo"

@@ -6,6 +6,8 @@ import {
   permissoesDocumentos,
   mesmaEmpresa,
   MENSAGEM_SEM_PERMISSAO,
+  podeBaixar,
+  podeRestaurar,
 } from '../utils/documentosAcesso.js';
 
 const router = Router();
@@ -652,8 +654,11 @@ router.get('/:id/download', async (req: Request, res: Response) => {
     if (docError || !doc || !mesmaEmpresa(req, doc.empresa_id)) {
       return res.status(404).json({ success: false, error: 'Documento não encontrado.' });
     }
-    if (!(await pode(req, 'visualizar'))) {
-      return res.status(403).json({ success: false, error: MENSAGEM_SEM_PERMISSAO.visualizar });
+    if (!(await podeBaixar(req))) {
+      return res.status(403).json({
+        success: false,
+        error: 'Seu cargo não tem a ação "Baixar arquivo" em Documentos do colaborador. Peça a liberação em Permissões por Cargo.',
+      });
     }
 
     // Nome amigável: ASO_FABRICIO_DE_OLIVEIRA_SILVA.pdf
@@ -745,8 +750,11 @@ router.post('/:id/restaurar', async (req: Request, res: Response) => {
     if (!doc || !mesmaEmpresa(req, doc.empresa_id)) {
       return res.status(404).json({ success: false, error: 'Documento não encontrado.' });
     }
-    if (!(await pode(req, 'excluir'))) {
-      return res.status(403).json({ success: false, error: MENSAGEM_SEM_PERMISSAO.excluir });
+    if (!(await podeRestaurar(req))) {
+      return res.status(403).json({
+        success: false,
+        error: 'Seu cargo não tem a ação "Restaurar excluído" em Documentos do colaborador. Peça a liberação em Permissões por Cargo.',
+      });
     }
     if (doc.status !== 'excluido') {
       return res.status(400).json({ success: false, error: 'Só documentos excluídos podem ser restaurados.' });

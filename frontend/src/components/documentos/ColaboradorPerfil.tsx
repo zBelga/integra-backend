@@ -161,12 +161,14 @@ function PreviewModal({
             <h3 className="text-sm font-bold text-[#17212B] truncate">{nome}</h3>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={onBaixar}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#176B87] hover:bg-[#135a73] text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
-            >
-              <Download className="w-3.5 h-3.5" /> Baixar
-            </button>
+            {onBaixar && (
+              <button
+                onClick={onBaixar}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#176B87] hover:bg-[#135a73] text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" /> Baixar
+              </button>
+            )}
             <button
               onClick={onClose}
               aria-label="Fechar"
@@ -265,7 +267,9 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
   const catalogo = dados?.catalogo || [];
   const semExigencias = !isLoading && checklist.length === 0;
   // Enquanto não carrega, esconde ações de escrita (o servidor valida de novo)
-  const perm: PermissoesDocumentos = dados?.permissoes || { visualizar: true, criar: false, editar: false, excluir: false };
+  const perm: PermissoesDocumentos =
+    dados?.permissoes || { visualizar: true, criar: false, editar: false, excluir: false, baixar: false, restaurar: false };
+  const podeBaixar = !!perm.baixar;
 
   /** Alerta do tipo, por id — usado para calcular o status de cada anexo. */
   const alertaPorTipo = useMemo(() => {
@@ -646,7 +650,7 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
                                 <Eye className="w-3.5 h-3.5" />
                               )}
                             </button>
-                            <button
+                            {podeBaixar && (<button
                               onClick={() => comArquivo(anexo, 'baixar')}
                               disabled={ocupado}
                               title="Baixar"
@@ -654,7 +658,7 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
                               className="flex-1 flex items-center justify-center py-1.5 border border-[#DDE3E8] hover:border-[#176B87] hover:bg-[#EEF4F7] rounded-lg text-[#17212B] transition-colors cursor-pointer disabled:opacity-50"
                             >
                               <Download className="w-3.5 h-3.5" />
-                            </button>
+                            </button>)}
                             {perm.excluir && (
                               <button
                                 onClick={() => setExcluindo(anexo)}
@@ -906,7 +910,7 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
       {perm.visualizar && (
         <HistoricoDocumentosPanel
           colaboradorId={colaborador.id}
-          podeRestaurar={perm.excluir}
+          podeRestaurar={!!perm.restaurar}
           onAbrir={comArquivo}
           onRestaurado={carregar}
           versao={versao}
@@ -951,6 +955,7 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
           anexados={anexados}
           onAbrir={(doc, acao) => { setShowListaCompleta(false); comArquivo(doc, acao); }}
           podeAgir={podeAgirNoItem}
+          podeBaixar={podeBaixar}
           onAnexar={item => { setShowListaCompleta(false); abrirUpload(item); }}
           onClose={() => setShowListaCompleta(false)}
         />
@@ -960,7 +965,7 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
         <PreviewModal
           url={preview.url}
           nome={preview.nome}
-          onBaixar={() => comArquivo(preview.doc, 'baixar')}
+          onBaixar={podeBaixar ? () => comArquivo(preview.doc, 'baixar') : undefined}
           onClose={() => setPreview(null)}
         />
       )}
@@ -998,10 +1003,12 @@ function AcoesDoc({
           <Eye className="w-3.5 h-3.5" />
         )}
       </button>
-      <button onClick={onBaixar} disabled={ocupado} title="Baixar" aria-label="Baixar"
-        className={`${botao} hover:text-[#176B87] hover:bg-[#EEF4F7]`}>
-        <Download className="w-3.5 h-3.5" />
-      </button>
+      {perm.baixar && (
+        <button onClick={onBaixar} disabled={ocupado} title="Baixar" aria-label="Baixar"
+          className={`${botao} hover:text-[#176B87] hover:bg-[#EEF4F7]`}>
+          <Download className="w-3.5 h-3.5" />
+        </button>
+      )}
       {perm.editar && (
         <button onClick={onSubstituir} disabled={ocupado} title="Substituir" aria-label="Substituir"
           className={`${botao} hover:text-[#D4890A] hover:bg-[#FEF3E0]`}>
@@ -1079,6 +1086,7 @@ function ListaCompletaModal({
   funcao,
   anexados,
   podeAgir,
+  podeBaixar,
   onAnexar,
   onAbrir,
   onClose,
@@ -1087,6 +1095,7 @@ function ListaCompletaModal({
   funcao: string;
   anexados: Documento[];
   podeAgir: (item: ChecklistItem) => boolean;
+  podeBaixar: boolean;
   onAnexar: (item: ChecklistItem) => void;
   onAbrir: (doc: Documento, acao: 'ver' | 'baixar') => void;
   onClose: () => void;
@@ -1137,14 +1146,16 @@ function ListaCompletaModal({
                     >
                       <Eye className="w-3.5 h-3.5" />
                     </button>
-                    <button
-                      onClick={() => onAbrir(anexo, 'baixar')}
-                      title="Baixar"
-                      aria-label={`Baixar ${item.nome}`}
-                      className="p-1.5 border border-[#DDE3E8] hover:border-[#176B87] rounded-lg text-[#17212B] cursor-pointer shrink-0"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                    </button>
+                    {podeBaixar && (
+                      <button
+                        onClick={() => onAbrir(anexo, 'baixar')}
+                        title="Baixar"
+                        aria-label={`Baixar ${item.nome}`}
+                        className="p-1.5 border border-[#DDE3E8] hover:border-[#176B87] rounded-lg text-[#17212B] cursor-pointer shrink-0"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </>
                 )}
                 {liberado && (

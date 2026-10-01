@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { queryRows, executeQuery, saveDbToDisk } from '../db.js';
 
 import { somenteMaster, MODULOS } from '../utils/permissoes.js';
+import { todasAsChaves, buscarTela } from '../utils/catalogoPermissoes.js';
 const router = Router();
 
 // GET /api/cargos - List cargos filtered by empresa_id (strict company isolation)
@@ -100,6 +101,42 @@ async function gravarPermissoes(cargoId: string, empresaId: string, lista: any[]
   }
 }
 
+/**
+ * Grava a árvore de telas do cargo (modelo novo).
+ * Recebe { 'modulo.tela': { ver, criar, editar, excluir, extras: {} } }.
+ * Tela que não vier fica fechada — nunca aberta por omissão.
+ */
+async function gravarTelas(cargoId: string, empresaId: string, arvore: any) {
+  for (const chave of todasAsChaves()) {
+    const [modulo, tela] = chave.split('.');
+    const info = buscarTela(chave);
+    const p = (arvore && arvore[chave]) || {};
+    const ver = p.ver ? 1 : 0;
+    const extras: Record<string, boolean> = {};
+    (info?.tela.extras || []).forEach(e => {
+      extras[e.id] = !!(ver && p.extras && p.extras[e.id]);
+    });
+
+    await executeQuery(
+      `INSERT OR REPLACE INTO cargos_telas
+       (id, empresa_id, cargo_id, modulo, tela, ver, criar, editar, excluir, extras, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      [
+        `tela-${cargoId}-${modulo}-${tela}`,
+        empresaId,
+        cargoId,
+        modulo,
+        tela,
+        ver,
+        ver && p.criar ? 1 : 0,
+        ver && p.editar ? 1 : 0,
+        ver && p.excluir ? 1 : 0,
+        JSON.stringify(extras),
+      ]
+    );
+  }
+}
+
 // POST /api/cargos - Create new cargo for a company
 router.post('/', somenteMaster, async (req, res) => {
   try {
@@ -143,8 +180,9 @@ router.post('/', somenteMaster, async (req, res) => {
       [newId, empresa_id, trimmedNome, descricao?.trim() || '', cargoStatus]
     );
 
-    // O cargo já nasce com a matriz definida na própria tela de criação
+    // O cargo já nasce com as permissões definidas na própria tela de criação
     await gravarPermissoes(newId, empresa_id, permissoes);
+    await gravarTelas(newId, empresa_id, req.body.telas || {});
     await saveDbToDisk();
 
     const created = await queryRows('SELECT * FROM cargos WHERE id = ?', [newId]);

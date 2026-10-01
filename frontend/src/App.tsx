@@ -15,6 +15,47 @@ import { TiposDocumentoView } from './components/documentos/TiposDocumentoView';
 import { DocumentosPorFuncaoView } from './components/documentos/DocumentosPorFuncaoView';
 import { Toast, ToastMessage } from './components/ui/Toast';
 import { fetchEmpresas, createEmpresa, updateEmpresa, deleteEmpresa, fetchPermissoesUsuario } from './services/api';
+import { podeNaTela, ehMaster } from './utils/permissoes';
+
+/**
+ * Qual tela do catálogo de permissões libera cada view.
+ * View fora desta lista é livre (painel, seleção de empresa, "em breve").
+ * As views marcadas 'master' são exclusivas do administrador geral.
+ */
+const TELA_DA_VIEW: Partial<Record<ActiveView, string>> = {
+  administrativo: 'administrativo.admissoes',
+  efetivo: 'administrativo.efetivo',
+  'efetivo-obra': 'administrativo.efetivoObra',
+  documentos: 'documentacao.documentos',
+  'colaborador-perfil': 'documentacao.documentos',
+  'documento-tipos': 'documentacao.tipos',
+  'documentos-funcao': 'documentacao.porFuncao',
+  solicitacoes: 'aprovacoes.solicitacoes',
+  permissoes: 'master',
+  usuarios: 'master',
+};
+
+/** Tela bloqueada pelo cargo */
+const AcessoRestrito: React.FC<{ onVoltar: () => void }> = ({ onVoltar }) => (
+  <div className="flex-1 flex items-center justify-center p-6">
+    <div className="text-center max-w-md">
+      <div className="w-14 h-14 rounded-2xl bg-[#FDEBEC] border border-[#F5C6CA] flex items-center justify-center mx-auto mb-4">
+        <span className="text-2xl" aria-hidden="true">🔒</span>
+      </div>
+      <h2 className="text-lg font-bold text-[#17212B]">Acesso restrito</h2>
+      <p className="text-sm text-[#687582] mt-2 leading-relaxed">
+        Seu cargo não tem permissão para esta tela. Se você precisa dela, peça a
+        liberação em Cargos &amp; Permissões.
+      </p>
+      <button
+        onClick={onVoltar}
+        className="mt-6 px-4 py-2 text-xs font-semibold text-white bg-[#176B87] hover:bg-[#135a73] rounded-lg transition-colors cursor-pointer"
+      >
+        Voltar aos módulos
+      </button>
+    </div>
+  </div>
+);
 
 /** Placeholder para telas que ainda não existem */
 const EmBreve: React.FC<{ titulo: string; onVoltar: () => void }> = ({ titulo, onVoltar }) => (
@@ -52,6 +93,17 @@ export default function App() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
+
+  /** A view atual é liberada para o cargo? (o servidor confere de novo) */
+  const telaDaView = TELA_DA_VIEW[currentView];
+  const viewLiberada = !telaDaView
+    ? true
+    : !permissoes
+      ? false // sem resposta do servidor ainda: não mostra nada
+      : telaDaView === 'master'
+        ? ehMaster(permissoes)
+        : podeNaTela(permissoes, telaDaView, 'ver');
+  const telaBloqueada = !!permissoes && !viewLiberada;
 
   const loadEmpresas = useCallback(async () => {
     try {
@@ -213,6 +265,8 @@ export default function App() {
         />
 
         <main className="flex-1">
+          {telaBloqueada && <AcessoRestrito onVoltar={() => setCurrentView('dashboard')} />}
+          {!telaBloqueada && (<>
           {currentView === 'empresas' && (
             <EmpresaSelection
               empresas={empresas}
@@ -279,6 +333,7 @@ export default function App() {
               onNavigate={setCurrentView}
             />
           )}
+          </>)}
         </main>
 
         <Toast toast={toast} onClose={() => setToast(null)} />

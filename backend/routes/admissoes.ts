@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { queryRows, executeQuery } from '../db.js';
 import { cleanCPF, isValidCPF } from '../utils/cpf.js';
 
-import { exigir } from '../utils/permissoes.js';
+import { exigirTela, exigirExtra } from '../utils/permissoes.js';
 
 const router = Router();
 
@@ -25,7 +25,7 @@ function empresaDoPedido(req: Request): string {
  * Quantos foram contratados em cada dia — alimenta as abas "Contratados 29/09".
  * Lê do efetivo: mesmo depois de virar colaborador, o dia da contratação fica.
  */
-router.get('/contratados/resumo', async (req: Request, res: Response) => {
+router.get('/contratados/resumo', exigirTela('administrativo.admissoes', 'ver'), async (req: Request, res: Response) => {
   try {
     const empresa_id = empresaDoPedido(req);
     let linhas: any[] = [];
@@ -56,7 +56,7 @@ router.get('/contratados/resumo', async (req: Request, res: Response) => {
  * GET /api/admissoes/contratados?data=AAAA-MM-DD
  * Quem foi contratado naquele dia. Só leitura — os dados vivem no efetivo.
  */
-router.get('/contratados', async (req: Request, res: Response) => {
+router.get('/contratados', exigirTela('administrativo.admissoes', 'ver'), async (req: Request, res: Response) => {
   try {
     const empresa_id = empresaDoPedido(req);
     const dia = String(req.query.data || '').slice(0, 10);
@@ -85,7 +85,7 @@ router.get('/contratados', async (req: Request, res: Response) => {
   }
 });
 
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', exigirTela('administrativo.admissoes', 'ver'), async (req: Request, res: Response) => {
   try {
     const rawPage = parseInt(req.query.page as string, 10) || 1;
     const page = Math.max(1, rawPage);
@@ -192,7 +192,7 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // GET /api/admissoes/:id - Single admission details
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/:id', exigirTela('administrativo.admissoes', 'ver'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const sql = `
@@ -244,7 +244,7 @@ async function verifyCargoPermission(req: Request, acao: 'visualizar' | 'criar' 
 }
 
 // POST /api/admissoes - Create new admission
-router.post('/', exigir('admissoes', 'criar'), async (req: Request, res: Response) => {
+router.post('/', exigirTela('administrativo.admissoes', 'criar'), async (req: Request, res: Response) => {
   try {
     const permCheck = await verifyCargoPermission(req, 'criar');
     if (!permCheck.allowed) {
@@ -341,7 +341,7 @@ router.post('/', exigir('admissoes', 'criar'), async (req: Request, res: Respons
 });
 
 // PUT /api/admissoes/:id - Update existing admission
-router.put('/:id', exigir('admissoes', 'editar'), async (req: Request, res: Response) => {
+router.put('/:id', exigirTela('administrativo.admissoes', 'editar'), async (req: Request, res: Response) => {
   try {
     const permCheck = await verifyCargoPermission(req, 'editar');
     if (!permCheck.allowed) {
@@ -441,7 +441,7 @@ router.put('/:id', exigir('admissoes', 'editar'), async (req: Request, res: Resp
 });
 
 // DELETE /api/admissoes/:id - Delete admission
-router.delete('/:id', exigir('admissoes', 'excluir'), async (req: Request, res: Response) => {
+router.delete('/:id', exigirTela('administrativo.admissoes', 'excluir'), async (req: Request, res: Response) => {
   try {
     const permCheck = await verifyCargoPermission(req, 'excluir');
     if (!permCheck.allowed) {
@@ -462,7 +462,7 @@ router.delete('/:id', exigir('admissoes', 'excluir'), async (req: Request, res: 
 });
 
 // POST /api/admissoes/:id/contratar - Promote admission to efetivo
-router.post('/:id/contratar', exigir('admissoes', 'editar'), async (req: Request, res: Response) => {
+router.post('/:id/contratar', exigirExtra('administrativo.admissoes', 'contratar'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { rg = '', numero_chapa = '', data_admissao } = req.body;

@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { queryRows, executeQuery, saveDbToDisk } from '../db.js';
-import { pode, ehMaster, Modulo, Acao } from '../utils/permissoes.js';
+import { pode, ehMaster, Modulo, Acao, exigirTela } from '../utils/permissoes.js';
 
 const router = Router();
 
@@ -17,7 +17,7 @@ async function podeNoModuloDaSolicitacao(req: Request, modulo: string, acao: Aca
 }
 
 // GET /api/solicitacoes/stats/counts - Get badge counts
-router.get('/stats/counts', async (req: Request, res: Response) => {
+router.get('/stats/counts', exigirTela('aprovacoes.solicitacoes', 'ver'), async (req: Request, res: Response) => {
   try {
     const { empresa_id } = req.query;
     let sql = 'SELECT status, COUNT(*) as count FROM solicitacoes_alteracao WHERE 1=1';
@@ -59,7 +59,7 @@ router.get('/stats/counts', async (req: Request, res: Response) => {
 });
 
 // GET /api/solicitacoes - List change requests with filters
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', exigirTela('aprovacoes.solicitacoes', 'ver'), async (req: Request, res: Response) => {
   try {
     const { empresa_id, modulo, status, search, solicitante_id } = req.query;
 
@@ -135,7 +135,7 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // GET /api/solicitacoes/:id - Single request details with audit timeline
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/:id', exigirTela('aprovacoes.solicitacoes', 'ver'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 

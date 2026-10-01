@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { UserPlus, Search, Building, X, Download, Upload, Loader2, Send, ShieldCheck, Users, ClipboardList, UserCheck, ChevronDown } from 'lucide-react';
 import { ActiveView, Admissao, AdmissaoFilterState, AdmissaoFormData, DiaDeContratacao, Empresa, Obra, PaginationMeta } from '../../types';
 import { fetchAdmissoes, createAdmissao, updateAdmissao, deleteAdmissao, fetchObras, createObra, updateObra, deleteObra, fetchSolicitacoesStats, contratarAdmissao, fetchDiasDeContratacao } from '../../services/api';
+import { podeNaTela, podeExtra, ehMaster } from '../../utils/permissoes';
 import { useDebounce } from '../../utils/debounce';
 import { AdmissaoTable } from './AdmissaoTable';
 import { ContratadosDoDia } from './ContratadosDoDia';
@@ -33,13 +34,17 @@ export const AdministrativoView: React.FC<AdministrativoViewProps> = ({
   const theme = getCompanyTheme(companyColor);
 
   // O que este cargo pode fazer em Admissões e Obras (o servidor confere de novo)
-  const master = !!permissoes?.master;
-  const admPerm = permissoes?.modulos?.admissoes;
-  const podeCriarAdmissao = master || !!admPerm?.criar;
-  const podeEditarAdmissao = master || !!admPerm?.editar;
-  const podeExcluirAdmissao = master || !!admPerm?.excluir;
+  const master = ehMaster(permissoes);
+  const TELA_ADM = 'administrativo.admissoes';
+  const podeCriarAdmissao = podeNaTela(permissoes, TELA_ADM, 'criar');
+  const podeEditarAdmissao = podeNaTela(permissoes, TELA_ADM, 'editar');
+  const podeExcluirAdmissao = podeNaTela(permissoes, TELA_ADM, 'excluir');
+  const podeContratar = podeExtra(permissoes, TELA_ADM, 'contratar');
+  const podeImportar = podeExtra(permissoes, TELA_ADM, 'importar');
+  const podeExportar = podeExtra(permissoes, TELA_ADM, 'exportar');
   const podeGerenciarObras =
-    master || !!permissoes?.modulos?.obras?.criar || !!permissoes?.modulos?.obras?.editar;
+    podeNaTela(permissoes, 'administrativo.obras', 'criar') ||
+    podeNaTela(permissoes, 'administrativo.obras', 'editar');
 
   // Active simulated role inside the module
   const [activeRole, setActiveRole] = useState<'encarregado' | 'assistente' | 'master'>('encarregado');
@@ -407,7 +412,7 @@ export const AdministrativoView: React.FC<AdministrativoViewProps> = ({
           )}
 
           {/* Export to Excel */}
-          <button
+          {podeExportar && (<button
             onClick={handleExportExcel}
             disabled={isExporting}
             className="px-3 py-2 border border-[#DDE3E8] rounded-xl text-xs font-semibold text-[#17212B] bg-white hover:bg-[#F8FAFB] transition-colors flex items-center space-x-1.5 shadow-2xs disabled:opacity-50 cursor-pointer"
@@ -419,10 +424,10 @@ export const AdministrativoView: React.FC<AdministrativoViewProps> = ({
               <Download className="w-4 h-4 text-[#687582]" />
             )}
             <span>Exportar Excel</span>
-          </button>
+          </button>)}
 
           {/* Import from Excel */}
-          {podeCriarAdmissao && (<button
+          {podeImportar && (<button
             onClick={() => setIsImportModalOpen(true)}
             className="px-3 py-2 border border-[#DDE3E8] rounded-xl text-xs font-semibold text-[#17212B] bg-white hover:bg-[#F8FAFB] transition-colors flex items-center space-x-1.5 shadow-2xs cursor-pointer"
             title="Importar lista de admissões via planilha Excel"
@@ -643,6 +648,7 @@ export const AdministrativoView: React.FC<AdministrativoViewProps> = ({
             onContratar={(adm) => setContratarAdm(adm)}
             podeEditar={podeEditarAdmissao}
             podeExcluir={podeExcluirAdmissao}
+            podeContratar={podeContratar}
           onDelete={(adm) => {
               setDeleteTarget(adm);
             }}

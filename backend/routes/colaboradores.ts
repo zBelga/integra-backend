@@ -1,11 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { queryRows, executeQuery } from '../db.js';
-import { exigir } from '../utils/permissoes.js';
+import { exigirTela, exigirAlgumaTela } from '../utils/permissoes.js';
 
 const router = Router();
 
 // GET /api/colaboradores - List efetivo with pagination and search
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', exigirAlgumaTela(['administrativo.efetivo', 'administrativo.efetivoObra', 'documentacao.documentos']), async (req: Request, res: Response) => {
   try {
     const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
     const limit = Math.min(500, Math.max(1, parseInt(req.query.limit as string, 10) || 25));
@@ -50,7 +50,7 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // GET /api/colaboradores/:id
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/:id', exigirAlgumaTela(['administrativo.efetivo', 'administrativo.efetivoObra', 'documentacao.documentos']), async (req: Request, res: Response) => {
   try {
     const rows = await queryRows(`
       SELECT c.*, o.nome as obra_nome, o.codigo as obra_codigo
@@ -66,7 +66,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 });
 
 // PUT /api/colaboradores/:id
-router.put('/:id', exigir('efetivo', 'editar'), async (req: Request, res: Response) => {
+router.put('/:id', exigirTela('administrativo.efetivo', 'editar'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { nome, funcao, rg, numero_chapa, obra_id, data_admissao, data_aso } = req.body;

@@ -634,6 +634,43 @@ export async function fetchPermissoesUsuario(): Promise<{
   return json;
 }
 
+/** Catálogo de módulos, telas e ações especiais do sistema. */
+export async function fetchCatalogoPermissoes(): Promise<{
+  success: boolean;
+  data: { modulos: import('../types').ModuloCatalogo[]; acoes: import('../types').AcaoTela[] };
+}> {
+  const res = await apiFetch('/api/permissoes/catalogo');
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Erro ao carregar o catálogo de telas');
+  return json;
+}
+
+/** Permissões de um cargo, tela por tela. */
+export async function fetchPermissoesDoCargo(cargoId: string): Promise<{
+  success: boolean;
+  data: { telas: import('../types').MapaTelas; migrado: boolean };
+}> {
+  const res = await apiFetch(`/api/permissoes/cargo/${cargoId}/telas`);
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Erro ao carregar as permissões do cargo');
+  return json;
+}
+
+/** Grava a árvore inteira do cargo. Mexe só na regra. */
+export async function salvarPermissoesDoCargo(
+  cargoId: string,
+  telas: import('../types').MapaTelas,
+  empresa_id?: string
+): Promise<{ success: boolean }> {
+  const res = await apiFetch(`/api/permissoes/cargo/${cargoId}/telas`, {
+    method: 'PUT',
+    body: JSON.stringify({ telas, empresa_id }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Erro ao salvar as permissões');
+  return json;
+}
+
 /** Dias que tiveram contratação, com a quantidade — abas de Admissões. */
 export async function fetchDiasDeContratacao(): Promise<{
   success: boolean;

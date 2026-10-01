@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, User, Mail, Lock, Building2, Briefcase, Phone, Layers, ShieldCheck, AlertCircle, Plus, Info } from 'lucide-react';
 import { Empresa, UsuarioSistema, UsuarioFormData, CargoEmpresa } from '../../types';
 import { getCompanyTheme } from '../../utils/theme';
-import { fetchCargos, fetchPermissoes } from '../../services/api';
+import { fetchCargos, fetchCatalogoPermissoes, fetchPermissoesDoCargo } from '../../services/api';
 import { CargoFormModal } from './CargoFormModal';
 
 interface UsuarioFormModalProps {
@@ -140,34 +140,35 @@ export const UsuarioFormModal: React.FC<UsuarioFormModalProps> = ({
     loadCargosForEmpresa(newEmpresaId);
   };
 
-  /** Lê a matriz do cargo e monta a frase do que ele libera. */
+  /** Lê as telas liberadas no cargo e monta a frase do que ele permite. */
   useEffect(() => {
     const cargoId = formData.cargo_id;
     if (!cargoId) { setResumoCargo([]); return; }
     let ativo = true;
     setCarregandoResumo(true);
-    const NOMES: Record<string, string> = {
-      admissoes: 'Admissões', efetivo: 'Efetivo', obras: 'Obras', documentos: 'Documentação',
-      rh: 'Recursos Humanos', relatorios: 'Relatórios', usuarios: 'Gestão de Usuários',
-    };
-    const ACOES: [string, string][] = [
-      ['criar', 'criar'], ['editar', 'editar'], ['excluir', 'excluir'],
-      ['solicitar', 'solicitar'], ['aprovar', 'aprovar'],
-    ];
-    fetchPermissoes({ cargo_id: cargoId })
-      .then(res => {
+    Promise.all([fetchCatalogoPermissoes(), fetchPermissoesDoCargo(cargoId)])
+      .then(([cat, perm]) => {
         if (!ativo) return;
-        const ORDEM = ['admissoes', 'efetivo', 'obras', 'documentos', 'rh', 'relatorios', 'usuarios'];
-        const linhas = (res.data || [])
-          .filter((p: any) => p.cargo_id === cargoId && p.visualizar && ORDEM.includes(String(p.modulo)))
-          .sort((a: any, b: any) => ORDEM.indexOf(String(a.modulo)) - ORDEM.indexOf(String(b.modulo)));
-        setResumoCargo(
-          linhas.map((p: any) => {
-            const pode = ACOES.filter(([campo]) => p[campo]).map(([, rotulo]) => rotulo);
-            const nome = NOMES[String(p.modulo)] || String(p.modulo);
-            return pode.length ? `${nome}: ver, ${pode.join(', ')}` : `${nome}: apenas ver`;
-          })
-        );
+        const mapa = perm.data?.telas || {};
+        const linhas: string[] = [];
+        (cat.data?.modulos || []).forEach(mod => {
+          if (mod.emBreve) return;
+          (mod.telas || []).forEach(tela => {
+            const p: any = mapa[`${mod.id}.${tela.id}`];
+            if (!p?.ver) return;
+            const acoes: string[] = [];
+            if (p.criar) acoes.push('criar');
+            if (p.editar) acoes.push('editar');
+            if (p.excluir) acoes.push('excluir');
+            (tela.extras || []).forEach(e => {
+              if (p.extras?.[e.id]) acoes.push(e.nome.toLowerCase());
+            });
+            linhas.push(
+              `${mod.nome} › ${tela.nome}: ${acoes.length ? `ver, ${acoes.join(', ')}` : 'apenas ver'}`
+            );
+          });
+        });
+        setResumoCargo(linhas);
       })
       .catch(() => { if (ativo) setResumoCargo([]); })
       .finally(() => { if (ativo) setCarregandoResumo(false); });

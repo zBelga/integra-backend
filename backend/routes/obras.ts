@@ -1,11 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { queryRows, executeQuery } from '../db.js';
-import { exigir } from '../utils/permissoes.js';
+import { exigirTela, exigirAlgumaTela } from '../utils/permissoes.js';
 
 const router = Router();
 
 // GET /api/obras - List all obras
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', exigirAlgumaTela(['administrativo.obras', 'administrativo.admissoes', 'administrativo.efetivo', 'administrativo.efetivoObra']), async (req: Request, res: Response) => {
   try {
     const obras = await queryRows(
       'SELECT id, nome, codigo, created_at, updated_at FROM obras ORDER BY nome ASC'
@@ -17,7 +17,7 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // POST /api/obras - Create new obra
-router.post('/', exigir('obras', 'criar'), async (req: Request, res: Response) => {
+router.post('/', exigirTela('administrativo.obras', 'criar'), async (req: Request, res: Response) => {
   try {
 
     const { nome, codigo } = req.body;
@@ -53,7 +53,7 @@ router.post('/', exigir('obras', 'criar'), async (req: Request, res: Response) =
 });
 
 // PUT /api/obras/:id - Update obra
-router.put('/:id', exigir('obras', 'editar'), async (req: Request, res: Response) => {
+router.put('/:id', exigirTela('administrativo.obras', 'editar'), async (req: Request, res: Response) => {
   try {
 
     const { id } = req.params;
@@ -94,7 +94,7 @@ router.put('/:id', exigir('obras', 'editar'), async (req: Request, res: Response
 });
 
 // DELETE /api/obras/:id - Delete obra
-router.delete('/:id', exigir('obras', 'excluir'), async (req: Request, res: Response) => {
+router.delete('/:id', exigirTela('administrativo.obras', 'excluir'), async (req: Request, res: Response) => {
   try {
 
     const { id } = req.params;
