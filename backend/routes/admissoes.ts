@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { queryRows, executeQuery } from '../db.js';
 import { cleanCPF, isValidCPF } from '../utils/cpf.js';
 
-import { exigirTela, exigirExtra } from '../utils/permissoes.js';
+import { exigirTela, exigirExtra, empresaDoPedido } from '../utils/permissoes.js';
 
 const router = Router();
 
@@ -12,13 +12,6 @@ function hojeBR(): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
 }
 
-/** empresa do pedido: o token manda; a query só vale para o master. */
-function empresaDoPedido(req: Request): string {
-  const doToken = req.user?.empresa_id;
-  const daQuery = String(req.query.empresa_id || '');
-  if (req.user?.perfil === 'master_admin' && daQuery) return daQuery;
-  return doToken || daQuery || 'emp-001';
-}
 
 /**
  * GET /api/admissoes/contratados/resumo
@@ -104,6 +97,13 @@ router.get('/', exigirTela('administrativo.admissoes', 'ver'), async (req: Reque
 
     const whereClauses: string[] = [];
     const params: any[] = [];
+
+    // Isolamento entre empresas: a lista só traz as admissões da empresa ativa.
+    const empresaAtiva = empresaDoPedido(req);
+    if (empresaAtiva) {
+      whereClauses.push('a.empresa_id = ?');
+      params.push(empresaAtiva);
+    }
 
     // Search filter (by name or CPF)
     if (search) {
@@ -484,7 +484,11 @@ router.post('/:id/contratar', exigirExtra('administrativo.admissoes', 'contratar
     }
 
     const adm = admRows[0];
-    const empresaId = req.user?.empresa_id || adm.empresa_id || 'emp-001';
+    // O colaborador nasce na empresa da própria admissão (nunca num padrão fixo)
+    const empresaId = adm.empresa_id || req.user?.empresa_id || '';
+    if (!empresaId) {
+      return res.status(400).json({ success: false, error: 'Admissão sem empresa definida.' });
+    }
 
     // Check duplicate chapa
     const chapaCheck = await queryRows(

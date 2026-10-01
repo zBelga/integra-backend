@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { queryRows, executeQuery } from '../db.js';
-import { exigirTela, exigirAlgumaTela } from '../utils/permissoes.js';
+import { exigirTela, exigirAlgumaTela, empresaDoPedido, mesmaEmpresa } from '../utils/permissoes.js';
 
 const router = Router();
 
@@ -15,6 +15,13 @@ router.get('/', exigirAlgumaTela(['administrativo.efetivo', 'administrativo.efet
 
     const where: string[] = [];
     const params: any[] = [];
+
+    // Isolamento entre empresas: a lista só traz quem é da empresa ativa.
+    const empresa = empresaDoPedido(req);
+    if (empresa) {
+      where.push('c.empresa_id = ?');
+      params.push(empresa);
+    }
 
     if (search) {
       where.push('(c.nome LIKE ? OR c.cpf LIKE ? OR c.numero_chapa LIKE ?)');
@@ -59,6 +66,9 @@ router.get('/:id', exigirAlgumaTela(['administrativo.efetivo', 'administrativo.e
       WHERE c.id = ?
     `, [req.params.id]);
     if (rows.length === 0) return res.status(404).json({ success: false, error: 'Colaborador não encontrado.' });
+    if (!mesmaEmpresa(req, rows[0].empresa_id)) {
+      return res.status(403).json({ success: false, error: 'Colaborador de outra empresa.' });
+    }
     res.json({ success: true, data: rows[0] });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });

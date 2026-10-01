@@ -29,6 +29,37 @@ export function clearToken() {
   try { localStorage.removeItem(TOKEN_KEY); } catch {}
 }
 
+
+// ─────────────────────────────────────────────
+// EMPRESA ATIVA
+// Vai junto em todo pedido. Só vale para o master trocar de empresa — para os
+// demais o servidor ignora e usa a empresa do próprio login.
+// ─────────────────────────────────────────────
+export const EMPRESA_KEY = 'si_empresa_ativa';
+
+export function getEmpresaAtiva(): string | null {
+  try { return localStorage.getItem(EMPRESA_KEY); } catch { return null; }
+}
+
+export function setEmpresaAtiva(id: string) {
+  try { localStorage.setItem(EMPRESA_KEY, id); } catch {}
+}
+
+export function clearEmpresaAtiva() {
+  try { localStorage.removeItem(EMPRESA_KEY); } catch {}
+}
+
+/** Acrescenta empresa_id na URL quando quem chamou ainda não mandou um. */
+function comEmpresaAtiva(input: string): string {
+  const empresa = getEmpresaAtiva();
+  if (!empresa) return input;
+  const [caminho, busca = ''] = input.split('?');
+  const q = new URLSearchParams(busca);
+  if (q.get('empresa_id')) return input;
+  q.set('empresa_id', empresa);
+  return `${caminho}?${q.toString()}`;
+}
+
 function authHeaders(): Record<string, string> {
   const token = getToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
@@ -46,9 +77,10 @@ async function apiFetch(input: string, init: RequestInit = {}): Promise<Response
   if (typeof init.body === 'string' && !temContentType) {
     headers['Content-Type'] = 'application/json';
   }
-  const res = await fetch(apiUrl(input), { ...init, headers });
+  const res = await fetch(apiUrl(comEmpresaAtiva(input)), { ...init, headers });
   if (res.status === 401) {
     clearToken();
+    clearEmpresaAtiva();
     window.location.href = '/';
   }
   return res;

@@ -9,6 +9,7 @@ import {
   podeBaixar,
   podeRestaurar,
 } from '../utils/documentosAcesso.js';
+import { empresaDoPedido } from '../utils/permissoes.js';
 
 const router = Router();
 
@@ -52,13 +53,6 @@ function generateId() {
   return `doc-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-/** empresa_id efetivo: o do token manda; a query só vale para o master. */
-function empresaDoPedido(req: Request): string {
-  const doToken = req.user?.empresa_id;
-  const daQuery = String(req.query.empresa_id || req.body?.empresa_id || '');
-  if (req.user?.perfil === 'master_admin' && daQuery) return daQuery;
-  return doToken || daQuery;
-}
 
 function normalizar(texto: string): string {
   return String(texto || '').trim().toUpperCase();

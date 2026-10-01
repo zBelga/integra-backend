@@ -14,7 +14,15 @@ import { DocumentosView } from './components/documentos/DocumentosView';
 import { TiposDocumentoView } from './components/documentos/TiposDocumentoView';
 import { DocumentosPorFuncaoView } from './components/documentos/DocumentosPorFuncaoView';
 import { Toast, ToastMessage } from './components/ui/Toast';
-import { fetchEmpresas, createEmpresa, updateEmpresa, deleteEmpresa, fetchPermissoesUsuario } from './services/api';
+import {
+  fetchEmpresas,
+  createEmpresa,
+  updateEmpresa,
+  deleteEmpresa,
+  fetchPermissoesUsuario,
+  setEmpresaAtiva,
+  clearEmpresaAtiva,
+} from './services/api';
 import { podeNaTela, ehMaster } from './utils/permissoes';
 
 /**
@@ -145,6 +153,7 @@ export default function App() {
 
   const handleLogout = () => {
     setIsAuthenticated(false);
+    clearEmpresaAtiva();
     setSelectedEmpresa(null);
     setEmpresas([]);
     setCurrentView('empresas');
@@ -158,6 +167,7 @@ export default function App() {
 
   const handleSelectEmpresa = (empresa: Empresa) => {
     setSelectedEmpresa(empresa);
+    setEmpresaAtiva(empresa.id); // viaja em todo pedido daqui pra frente
     setCurrentView('dashboard');
     setToast({
       id: Date.now().toString(),

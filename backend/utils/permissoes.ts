@@ -306,6 +306,17 @@ export function somenteMaster(req: Request, res: Response, next: NextFunction) {
   });
 }
 
+/**
+ * Empresa que vale para este pedido.
+ * Fora do master é sempre a do token — o que vem na URL é ignorado.
+ */
+export function empresaDoPedido(req: Request): string {
+  const doToken = req.user?.empresa_id || '';
+  if (!ehMaster(req)) return doToken;
+  const daQuery = String((req.query as any)?.empresa_id || (req.body as any)?.empresa_id || '');
+  return daQuery || doToken;
+}
+
 /** Isolamento entre empresas: fora do master, só a empresa do token. */
 export function mesmaEmpresa(req: Request, empresaDoRegistro?: string | null): boolean {
   if (ehMaster(req)) return true;
