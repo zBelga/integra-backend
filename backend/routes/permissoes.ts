@@ -258,6 +258,11 @@ router.put('/cargo/:cargo_id/telas', somenteMaster, async (req: Request, res: Re
     }
     const empresaId = req.body.empresa_id || cargoRows[0].empresa_id;
 
+    // Limpa o que já existe deste cargo antes de regravar. Sem isso, uma linha
+    // antiga com outro "id" (de importação ou migração) bate na chave única
+    // (cargo_id, modulo, tela) e o salvamento falha.
+    await executeQuery('DELETE FROM cargos_telas WHERE cargo_id = ?', [cargoId]);
+
     for (const chave of todasAsChaves()) {
       const [modulo, tela] = chave.split('.');
       const info = buscarTela(chave);

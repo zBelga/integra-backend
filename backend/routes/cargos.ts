@@ -107,6 +107,11 @@ async function gravarPermissoes(cargoId: string, empresaId: string, lista: any[]
  * Tela que não vier fica fechada — nunca aberta por omissão.
  */
 async function gravarTelas(cargoId: string, empresaId: string, arvore: any) {
+  // Limpa o que já existe deste cargo antes de regravar. Sem isso, uma linha
+  // antiga com outro "id" (de importação ou migração) bate na chave única
+  // (cargo_id, modulo, tela) e o salvamento falha.
+  await executeQuery('DELETE FROM cargos_telas WHERE cargo_id = ?', [cargoId]);
+
   for (const chave of todasAsChaves()) {
     const [modulo, tela] = chave.split('.');
     const info = buscarTela(chave);
