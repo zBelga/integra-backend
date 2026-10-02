@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { queryRows } from '../db.js';
+import { queryRows, executeQuery, saveDbToDisk } from '../db.js';
 import { generateToken } from '../middleware/auth.js';
 
 import { requireAuth } from '../middleware/auth.js';
@@ -25,6 +25,7 @@ router.post('/login', async (req: Request, res: Response) => {
 
     const rows = await queryRows(
       `SELECT u.id, u.nome, u.email, u.senha, u.cargo, u.perfil, u.empresa_id, u.status,
+              u.senha_provisoria,
               e.nome AS empresa_nome, e.corPrimaria AS empresa_cor
        FROM usuarios u
        LEFT JOIN empresas e ON u.empresa_id = e.id
@@ -57,6 +58,9 @@ router.post('/login', async (req: Request, res: Response) => {
       });
     }
 
+    // Senha que o administrador definiu: a pessoa troca antes de usar o sistema
+    const precisaTrocarSenha = Number(user.senha_provisoria) === 1;
+
     const token = generateToken({
       id:         user.id,
       email:      user.email,
@@ -64,6 +68,7 @@ router.post('/login', async (req: Request, res: Response) => {
       cargo:      user.cargo,
       perfil:     user.perfil,
       empresa_id: user.empresa_id,
+      ...(precisaTrocarSenha ? { trocar_senha: true } : {}),
     });
 
     // Nunca retornar a senha
@@ -71,8 +76,11 @@ router.post('/login', async (req: Request, res: Response) => {
 
     return res.json({
       success: true,
-      message: `Bem-vindo, ${user.nome}!`,
+      message: precisaTrocarSenha
+        ? 'Defina sua senha para continuar.'
+        : `Bem-vindo, ${user.nome}!`,
       token,
+      precisa_trocar_senha: precisaTrocarSenha,
       user: userSemSenha,
     });
   } catch (err: any) {
@@ -136,6 +144,68 @@ router.get('/me', requireAuth, async (req: Request, res: Response) => {
     });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: 'Erro ao buscar dados do usuário.' });
+  }
+});
+
+/**
+ * POST /api/auth/trocar-senha
+ * A pessoa define a senha dela. Obrigatório no primeiro acesso, quando a senha
+ * ainda é a que o administrador cadastrou; depois disso continua valendo para
+ * quem quiser trocar, e aí a senha atual é exigida.
+ * Body: { senha_atual?: string; nova_senha: string }
+ */
+router.post('/trocar-senha', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const nova = String(req.body?.nova_senha || '');
+    const atual = String(req.body?.senha_atual || '');
+
+    const rows = await queryRows('SELECT id, senha, senha_provisoria FROM usuarios WHERE id = ?', [
+      req.user?.id || '',
+    ]);
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Usuário não encontrado.' });
+    }
+    const u = rows[0];
+    const provisoria = Number(u.senha_provisoria) === 1;
+
+    // Fora do primeiro acesso, confere a senha atual antes de trocar
+    if (!provisoria && u.senha !== atual) {
+      return res.status(401).json({ success: false, error: 'Senha atual incorreta.' });
+    }
+
+    if (nova.trim().length < 6) {
+      return res.status(400).json({
+        success: false,
+        error: 'A nova senha precisa ter pelo menos 6 caracteres.',
+      });
+    }
+    if (nova.trim() === String(u.senha || '')) {
+      return res.status(400).json({
+        success: false,
+        error: 'A nova senha precisa ser diferente da atual.',
+      });
+    }
+
+    await executeQuery(
+      'UPDATE usuarios SET senha = ?, senha_provisoria = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [nova.trim(), u.id]
+    );
+    await saveDbToDisk();
+
+    // Token novo, agora sem a trava de senha provisória
+    const token = generateToken({
+      id:         req.user!.id,
+      email:      req.user!.email,
+      nome:       req.user!.nome,
+      cargo:      req.user!.cargo,
+      perfil:     req.user!.perfil,
+      empresa_id: req.user!.empresa_id,
+    });
+
+    return res.json({ success: true, message: 'Senha alterada. Bom trabalho!', token });
+  } catch (err: any) {
+    console.error('[AUTH] Erro ao trocar senha:', err?.message);
+    return res.status(500).json({ success: false, error: 'Erro ao trocar a senha.' });
   }
 });
 

@@ -95,6 +95,8 @@ export interface LoginResponse {
   user?: any;
   message?: string;
   error?: string;
+  /** Senha cadastrada pelo administrador: a pessoa define a dela antes de entrar */
+  precisa_trocar_senha?: boolean;
 }
 
 export async function loginUser(email: string, senha: string): Promise<LoginResponse> {
@@ -107,6 +109,24 @@ export async function loginUser(email: string, senha: string): Promise<LoginResp
   if (res.ok && json.token) {
     setToken(json.token);
   }
+  return json;
+}
+
+/**
+ * A pessoa define a senha dela.
+ * No primeiro acesso a senha atual não é pedida (ela acabou de usá-la no login).
+ */
+export async function trocarSenha(
+  nova_senha: string,
+  senha_atual?: string
+): Promise<{ success: boolean; message?: string; error?: string }> {
+  const res = await apiFetch('/api/auth/trocar-senha', {
+    method: 'POST',
+    body: JSON.stringify({ nova_senha, senha_atual: senha_atual || '' }),
+  });
+  const json = await res.json();
+  if (res.ok && json.token) setToken(json.token);
+  if (!res.ok) throw new Error(json.error || 'Não foi possível trocar a senha.');
   return json;
 }
 

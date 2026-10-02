@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, memo } from 'react';
-import { Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle, ShieldCheck, X } from 'lucide-react';
-import { loginUser } from '../../services/api';
+import { Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle, ShieldCheck, X, KeyRound, Check } from 'lucide-react';
+import { loginUser, trocarSenha } from '../../services/api';
 import { UsuarioSessao } from '../../types';
 
 interface LoginViewProps {
@@ -48,6 +48,132 @@ function useTelaGrande(): boolean {
   return grande;
 }
 
+/**
+ * Primeiro acesso: a pessoa troca a senha que o administrador cadastrou.
+ * A senha antiga não é pedida de novo — ela acabou de usá-la para entrar.
+ */
+const DefinirSenhaForm: React.FC<{ nome: string; onPronto: () => void }> = ({ nome, onPronto }) => {
+  const [nova, setNova] = useState('');
+  const [confirma, setConfirma] = useState('');
+  const [mostrar, setMostrar] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState('');
+
+  const curta = nova.length > 0 && nova.length < 6;
+  const diferem = confirma.length > 0 && nova !== confirma;
+  const podeSalvar = nova.length >= 6 && nova === confirma && !salvando;
+
+  const enviar = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErro('');
+    if (!podeSalvar) return;
+    setSalvando(true);
+    try {
+      await trocarSenha(nova);
+      onPronto();
+    } catch (err: any) {
+      setErro(err?.message || 'Não foi possível trocar a senha.');
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  const Regra = ({ ok, texto }: { ok: boolean; texto: string }) => (
+    <li className="flex items-center gap-2">
+      {ok ? (
+        <Check className="w-3.5 h-3.5 shrink-0 text-[#159A72]" aria-hidden="true" />
+      ) : (
+        <span
+          className="w-3.5 h-3.5 shrink-0 flex items-center justify-center"
+          aria-hidden="true"
+        >
+          <span className="w-[7px] h-[7px] rounded-full border border-[#44637A]" />
+        </span>
+      )}
+      <span className={ok ? 'text-[#A8C5D8]' : 'text-[#6D8EA5]'}>{texto}</span>
+    </li>
+  );
+
+  return (
+    <form onSubmit={enviar} noValidate>
+      <p className="mb-6 text-sm text-[#A8C5D8]">
+        Olá, <strong className="text-white font-semibold">{nome.split(' ')[0]}</strong>. Escolha uma
+        senha só sua — ninguém mais vai saber qual é.
+      </p>
+
+      <label htmlFor="nova-senha" className="block text-xs font-medium text-[#A8C5D8] mb-2">
+        Nova senha
+      </label>
+      <div className="campo-integra mb-5">
+        <KeyRound className="w-[18px] h-[18px] text-[#5E86A0]" aria-hidden="true" />
+        <input
+          id="nova-senha"
+          type={mostrar ? 'text' : 'password'}
+          autoComplete="new-password"
+          value={nova}
+          onChange={e => setNova(e.target.value)}
+          placeholder="••••••••"
+          disabled={salvando}
+          autoFocus
+        />
+        <button
+          type="button"
+          onClick={() => setMostrar(v => !v)}
+          aria-label={mostrar ? 'Ocultar senha' : 'Mostrar senha'}
+          className="text-[#5E86A0] hover:text-[#9FC4DA] transition-colors"
+          tabIndex={-1}
+        >
+          {mostrar ? <EyeOff className="w-[18px] h-[18px]" /> : <Eye className="w-[18px] h-[18px]" />}
+        </button>
+      </div>
+
+      <label htmlFor="confirma-senha" className="block text-xs font-medium text-[#A8C5D8] mb-2">
+        Repita a nova senha
+      </label>
+      <div className="campo-integra mb-4">
+        <KeyRound className="w-[18px] h-[18px] text-[#5E86A0]" aria-hidden="true" />
+        <input
+          id="confirma-senha"
+          type={mostrar ? 'text' : 'password'}
+          autoComplete="new-password"
+          value={confirma}
+          onChange={e => setConfirma(e.target.value)}
+          placeholder="••••••••"
+          disabled={salvando}
+        />
+      </div>
+
+      <ul className="mb-6 space-y-1.5 text-xs">
+        <Regra ok={nova.length >= 6} texto="Pelo menos 6 caracteres" />
+        <Regra ok={nova.length >= 6 && nova === confirma} texto="As duas senhas são iguais" />
+      </ul>
+
+      {(erro || curta || diferem) && (
+        <div className="alerta-integra mb-5" role="alert">
+          <AlertCircle className="w-4 h-4 shrink-0 mt-px" aria-hidden="true" />
+          <span>
+            {erro || (curta ? 'A senha precisa ter pelo menos 6 caracteres.' : 'As senhas não são iguais.')}
+          </span>
+        </div>
+      )}
+
+      <button type="submit" disabled={!podeSalvar} className="botao-integra">
+        {salvando ? (
+          <>
+            <span className="spinner-integra" aria-hidden="true" />
+            Salvando...
+          </>
+        ) : (
+          <>
+            Salvar e entrar
+            <ArrowRight className="w-[18px] h-[18px] seta-integra" aria-hidden="true" />
+          </>
+        )}
+      </button>
+    </form>
+  );
+};
+
 export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -57,6 +183,9 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
   const [errorMessage, setErrorMessage] = useState('');
   const [isForgotOpen, setIsForgotOpen] = useState(false);
   const telaGrande = useTelaGrande();
+
+  // Primeiro acesso: a senha veio do administrador e precisa ser trocada
+  const [definindoSenha, setDefinindoSenha] = useState<UsuarioSessao | null>(null);
 
   // Único efeito da tela: recupera o e-mail lembrado. Sem rede.
   useEffect(() => {
@@ -110,13 +239,21 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
             ? JSON.parse(result.user.permissoes || '[]')
             : [];
 
-        onLogin({
+        const sessao: UsuarioSessao = {
           email:      result.user?.email || emailNormalizado,
           name:       result.user?.nome  || 'Usuário',
           role:       result.user?.cargo || result.user?.perfil || 'Operacional',
           perfil:     result.user?.perfil,
           permissoes,
-        });
+        };
+
+        // Senha cadastrada pelo administrador: define a dela antes de entrar
+        if (result.precisa_trocar_senha) {
+          setDefinindoSenha(sessao);
+          return;
+        }
+
+        onLogin(sessao);
       } catch {
         setErrorMessage('Não foi possível conectar ao servidor. Verifique sua internet e tente novamente.');
       } finally {
@@ -190,13 +327,21 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
             </div>
 
             <h2 className="mt-8 text-[22px] font-semibold text-white leading-snug">
-              Acesse sua conta
+              {definindoSenha ? 'Crie sua senha' : 'Acesse sua conta'}
             </h2>
             <p className="mt-1.5 text-sm text-[#8FB0C6]">
-              Entre para gerenciar obras, admissões e documentos.
+              {definindoSenha
+                ? 'Esta é a primeira vez que você entra. A senha que o administrador cadastrou vale só para este acesso.'
+                : 'Entre para gerenciar obras, admissões e documentos.'}
             </p>
           </header>
 
+          {definindoSenha ? (
+            <DefinirSenhaForm
+              nome={definindoSenha.name}
+              onPronto={() => onLogin(definindoSenha)}
+            />
+          ) : (
           <form onSubmit={handleSubmit} noValidate>
             {/* E-mail */}
             <label htmlFor="login-email" className="block text-xs font-medium text-[#A8C5D8] mb-2">
@@ -287,6 +432,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
               )}
             </button>
           </form>
+          )}
 
           <footer className="mt-8 flex items-center justify-center gap-2 text-[11px] text-[#5E86A0]">
             <ShieldCheck className="w-3.5 h-3.5 text-[#159A72]" aria-hidden="true" />

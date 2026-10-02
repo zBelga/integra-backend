@@ -380,14 +380,19 @@ export const UsuarioFormModal: React.FC<UsuarioFormModalProps> = ({
                 {/* Senha */}
                 <div className="space-y-1 text-left">
                   <label className="block text-xs font-semibold text-[#17212B]">
-                    {usuarioToEdit ? 'Nova Senha (opcional)' : 'Senha Inicial de Acesso *'}
+                    {usuarioToEdit ? 'Nova senha provisória (opcional)' : 'Senha provisória de acesso *'}
                   </label>
+                  <p className="text-[11px] text-[#687582] leading-relaxed">
+                    {usuarioToEdit
+                      ? 'Preenchendo aqui, a pessoa entra com esta senha e define uma nova no próximo acesso.'
+                      : 'Vale só para o primeiro acesso: ao entrar, a pessoa cria a senha dela.'}
+                  </p>
                   <div className="relative">
                     <Lock className="w-4 h-4 text-[#8995A1] absolute left-3 top-1/2 -translate-y-1/2" />
                     <input
                       type="text"
                       required={!usuarioToEdit}
-                      placeholder={usuarioToEdit ? 'Deixe em branco para manter' : 'Mínimo 6 caracteres'}
+                      placeholder={usuarioToEdit ? 'Deixe em branco para manter a senha atual' : 'Mínimo 6 caracteres'}
                       value={formData.senha}
                       onChange={(e) => setFormData({ ...formData, senha: e.target.value })}
                       className="w-full pl-9 pr-3 py-2 bg-[#F8FAFB] border border-[#DDE3E8] rounded-xl text-xs text-[#17212B] focus:outline-none focus:ring-2 focus:ring-[#176B87]/20 focus:border-[#176B87] transition-all font-medium font-mono"

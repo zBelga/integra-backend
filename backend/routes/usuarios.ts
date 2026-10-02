@@ -187,8 +187,8 @@ router.post('/', somenteMaster, async (req: Request, res: Response) => {
 
     const insertSql = `
       INSERT INTO usuarios (
-        id, nome, email, senha, cargo_id, cargo, perfil, empresa_id, status, telefone, departamento, permissoes, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        id, nome, email, senha, cargo_id, cargo, perfil, empresa_id, status, telefone, departamento, permissoes, senha_provisoria, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     `;
 
     await executeQuery(insertSql, [
@@ -315,7 +315,9 @@ router.put('/:id', somenteMaster, async (req: Request, res: Response) => {
     ];
 
     if (senha && senha.trim()) {
-      updateSql += `, senha = ?`;
+      // Senha trocada pelo administrador volta a ser provisória: a pessoa
+      // define a dela no próximo acesso.
+      updateSql += `, senha = ?, senha_provisoria = 1`;
       params.push(senha.trim());
     }
 

@@ -117,6 +117,7 @@ async function getDbSqlite(): Promise<Database> {
         telefone TEXT DEFAULT '',
         departamento TEXT DEFAULT '',
         permissoes TEXT DEFAULT '[]',
+        senha_provisoria INTEGER DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
@@ -232,6 +233,10 @@ async function getDbSqlite(): Promise<Database> {
   // Ensure new columns exist for existing tables
   try {
     db.run("ALTER TABLE usuarios ADD COLUMN cargo_id TEXT DEFAULT ''");
+  } catch {}
+  // Senha definida pelo master: o usuário troca no primeiro acesso
+  try {
+    db.run('ALTER TABLE usuarios ADD COLUMN senha_provisoria INTEGER DEFAULT 0');
   } catch {}
   try {
     db.run("ALTER TABLE admissoes ADD COLUMN data_exame TEXT DEFAULT ''");
