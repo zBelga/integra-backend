@@ -37,8 +37,8 @@ export function clearToken() {
 // ─────────────────────────────────────────────
 export const EMPRESA_KEY = 'si_empresa_ativa';
 
-/** Marca que a sessão caiu por senha provisória — a tela de login explica. */
-export const AVISO_SENHA = 'si_aviso_senha_provisoria';
+/** Avisa a tela de que a senha ainda é a provisória (abre o popup de troca). */
+export const EVENTO_SENHA_PROVISORIA = 'integra:senha-provisoria';
 
 export function getEmpresaAtiva(): string | null {
   try { return localStorage.getItem(EMPRESA_KEY); } catch { return null; }
@@ -88,16 +88,13 @@ async function apiFetch(input: string, init: RequestInit = {}): Promise<Response
     return res;
   }
 
-  // Rede de segurança: o servidor avisa que a senha ainda é a provisória.
-  // Sem isto, a pessoa ficaria num sistema vazio, sem entender o porquê.
+  // O servidor avisa que a senha ainda é a provisória. Aqui NÃO se derruba a
+  // sessão: é ela que o popup de troca de senha usa. Só avisamos a tela.
   if (res.status === 403) {
     try {
       const copia = await res.clone().json();
       if (copia?.precisa_trocar_senha) {
-        clearToken();
-        clearEmpresaAtiva();
-        try { sessionStorage.setItem(AVISO_SENHA, '1'); } catch { /* ignora */ }
-        window.location.href = '/';
+        window.dispatchEvent(new CustomEvent(EVENTO_SENHA_PROVISORIA));
       }
     } catch {
       /* corpo não era JSON: segue o fluxo normal */

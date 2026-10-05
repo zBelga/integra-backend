@@ -23,6 +23,7 @@ import {
   fetchPermissoesUsuario,
   setEmpresaAtiva,
   clearEmpresaAtiva,
+  EVENTO_SENHA_PROVISORIA,
 } from './services/api';
 import { podeNaTela, ehMaster } from './utils/permissoes';
 
@@ -102,6 +103,14 @@ export default function App() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
+  /** Qualquer rota que responda "troque a senha" acende isto também. */
+  const [senhaProvisoria, setSenhaProvisoria] = useState(false);
+
+  useEffect(() => {
+    const aoAvisar = () => setSenhaProvisoria(true);
+    window.addEventListener(EVENTO_SENHA_PROVISORIA, aoAvisar);
+    return () => window.removeEventListener(EVENTO_SENHA_PROVISORIA, aoAvisar);
+  }, []);
 
   /** A view atual é liberada para o cargo? (o servidor confere de novo) */
   const telaDaView = TELA_DA_VIEW[currentView];
@@ -155,6 +164,7 @@ export default function App() {
   const handleLogout = () => {
     setIsAuthenticated(false);
     clearEmpresaAtiva();
+    setSenhaProvisoria(false);
     setSelectedEmpresa(null);
     setEmpresas([]);
     setCurrentView('empresas');
@@ -350,7 +360,7 @@ export default function App() {
         <Toast toast={toast} onClose={() => setToast(null)} />
 
         {/* Primeiro acesso: trocar a senha vem antes de qualquer outra coisa */}
-        {permissoes?.precisa_trocar_senha && (
+        {(senhaProvisoria || permissoes?.precisa_trocar_senha) && (
           <TrocarSenhaModal
             nome={currentUser?.name}
             onPronto={() => {
@@ -360,6 +370,7 @@ export default function App() {
                 title: 'Senha criada',
                 message: 'Pronto! Agora é só usar o sistema normalmente.',
               });
+              setSenhaProvisoria(false);
               loadPermissoes();
               loadEmpresas();
             }}
