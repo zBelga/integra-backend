@@ -99,7 +99,12 @@ router.get('/permissoes', requireAuth, async (req: Request, res: Response) => {
   try {
     const { permissoesDoUsuario } = await import('../utils/permissoes.js');
     // Já vem { master, perfil, empresa_id, modulos } — não embrulhar de novo.
-    res.json({ success: true, data: await permissoesDoUsuario(req) });
+    const dados = await permissoesDoUsuario(req);
+    // A tela usa isto para abrir a janela de troca de senha por cima de tudo.
+    res.json({
+      success: true,
+      data: { ...dados, precisa_trocar_senha: !!req.user?.trocar_senha },
+    });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }

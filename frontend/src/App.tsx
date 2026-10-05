@@ -10,6 +10,7 @@ import { EmpresaSelection } from './components/empresa/EmpresaSelection';
 import { PermissoesConfigView } from './components/permissoes/PermissoesConfigView';
 import { SolicitacoesView } from './components/solicitacoes/SolicitacoesView';
 import { LoginView } from './components/auth/LoginView';
+import { TrocarSenhaModal } from './components/auth/TrocarSenhaModal';
 import { DocumentosView } from './components/documentos/DocumentosView';
 import { TiposDocumentoView } from './components/documentos/TiposDocumentoView';
 import { DocumentosPorFuncaoView } from './components/documentos/DocumentosPorFuncaoView';
@@ -347,6 +348,23 @@ export default function App() {
         </main>
 
         <Toast toast={toast} onClose={() => setToast(null)} />
+
+        {/* Primeiro acesso: trocar a senha vem antes de qualquer outra coisa */}
+        {permissoes?.precisa_trocar_senha && (
+          <TrocarSenhaModal
+            nome={currentUser?.name}
+            onPronto={() => {
+              setToast({
+                id: Date.now().toString(),
+                type: 'success',
+                title: 'Senha criada',
+                message: 'Pronto! Agora é só usar o sistema normalmente.',
+              });
+              loadPermissoes();
+              loadEmpresas();
+            }}
+          />
+        )}
 
         <footer className="bg-white border-t border-[#DDE3E8] py-4 mt-auto">
           <div className="w-full px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-[#687582] gap-2">

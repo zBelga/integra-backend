@@ -107,6 +107,8 @@ export interface PermissoesUsuario {
   empresa_id: string;
   /** modulos['documentacao'].telas['documentos'].criar */
   modulos: Record<string, { algumAcesso: boolean; telas: Record<string, PermissaoTela> }>;
+  /** Senha ainda é a que o administrador cadastrou: a tela pede uma nova */
+  precisa_trocar_senha?: boolean;
 }
 
 /** Catálogo de módulos e telas (GET /api/permissoes/catalogo) */
