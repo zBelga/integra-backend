@@ -10,7 +10,7 @@ import { EmpresaSelection } from './components/empresa/EmpresaSelection';
 import { PermissoesConfigView } from './components/permissoes/PermissoesConfigView';
 import { SolicitacoesView } from './components/solicitacoes/SolicitacoesView';
 import { LoginView } from './components/auth/LoginView';
-import { TrocarSenhaModal } from './components/auth/TrocarSenhaModal';
+import { RedefinirSenhaView } from './components/auth/RedefinirSenhaView';
 import { DocumentosView } from './components/documentos/DocumentosView';
 import { TiposDocumentoView } from './components/documentos/TiposDocumentoView';
 import { DocumentosPorFuncaoView } from './components/documentos/DocumentosPorFuncaoView';
@@ -103,11 +103,15 @@ export default function App() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
-  /** Qualquer rota que responda "troque a senha" acende isto também. */
-  const [senhaProvisoria, setSenhaProvisoria] = useState(false);
+  /**
+   * Primeiro acesso: a senha ainda é a que o administrador cadastrou.
+   * Vem da resposta do login (é a fonte da verdade) e qualquer rota que
+   * responda "troque a senha" também acende isto, como garantia.
+   */
+  const [precisaRedefinirSenha, setPrecisaRedefinirSenha] = useState(false);
 
   useEffect(() => {
-    const aoAvisar = () => setSenhaProvisoria(true);
+    const aoAvisar = () => setPrecisaRedefinirSenha(true);
     window.addEventListener(EVENTO_SENHA_PROVISORIA, aoAvisar);
     return () => window.removeEventListener(EVENTO_SENHA_PROVISORIA, aoAvisar);
   }, []);
@@ -143,16 +147,25 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (isAuthenticated) {
+    // Enquanto a senha for a provisória o sistema está fechado no servidor:
+    // nem adianta pedir empresas ou permissões.
+    if (isAuthenticated && !precisaRedefinirSenha) {
       loadEmpresas();
       loadPermissoes();
     }
-  }, [isAuthenticated, loadEmpresas, loadPermissoes]);
+  }, [isAuthenticated, precisaRedefinirSenha, loadEmpresas, loadPermissoes]);
 
-  const handleLoginSuccess = (credentials: UsuarioSessao) => {
+  const handleLoginSuccess = (credentials: UsuarioSessao, precisaRedefinir = false) => {
     setCurrentUser(credentials);
     setIsAuthenticated(true);
     setCurrentView('empresas');
+
+    // Primeiro acesso: cai direto na tela de redefinir senha, sem toast
+    if (precisaRedefinir) {
+      setPrecisaRedefinirSenha(true);
+      return;
+    }
+
     setToast({
       id: Date.now().toString(),
       type: 'success',
@@ -164,7 +177,7 @@ export default function App() {
   const handleLogout = () => {
     setIsAuthenticated(false);
     clearEmpresaAtiva();
-    setSenhaProvisoria(false);
+    setPrecisaRedefinirSenha(false);
     setSelectedEmpresa(null);
     setEmpresas([]);
     setCurrentView('empresas');
@@ -243,6 +256,29 @@ export default function App() {
     return (
       <>
         <LoginView onLogin={handleLoginSuccess} />
+        <Toast toast={toast} onClose={() => setToast(null)} />
+      </>
+    );
+  }
+
+  // Primeiro acesso: o sistema não abre antes de a pessoa criar a senha dela.
+  if (precisaRedefinirSenha) {
+    return (
+      <>
+        <RedefinirSenhaView
+          nome={currentUser?.name}
+          email={currentUser?.email}
+          onPronto={() => {
+            setPrecisaRedefinirSenha(false);
+            setToast({
+              id: Date.now().toString(),
+              type: 'success',
+              title: 'Senha criada',
+              message: 'Pronto! Agora é só usar o sistema normalmente.',
+            });
+          }}
+          onSair={handleLogout}
+        />
         <Toast toast={toast} onClose={() => setToast(null)} />
       </>
     );
@@ -358,24 +394,6 @@ export default function App() {
         </main>
 
         <Toast toast={toast} onClose={() => setToast(null)} />
-
-        {/* Primeiro acesso: trocar a senha vem antes de qualquer outra coisa */}
-        {(senhaProvisoria || permissoes?.precisa_trocar_senha) && (
-          <TrocarSenhaModal
-            nome={currentUser?.name}
-            onPronto={() => {
-              setToast({
-                id: Date.now().toString(),
-                type: 'success',
-                title: 'Senha criada',
-                message: 'Pronto! Agora é só usar o sistema normalmente.',
-              });
-              setSenhaProvisoria(false);
-              loadPermissoes();
-              loadEmpresas();
-            }}
-          />
-        )}
 
         <footer className="bg-white border-t border-[#DDE3E8] py-4 mt-auto">
           <div className="w-full px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-[#687582] gap-2">

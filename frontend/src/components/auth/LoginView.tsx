@@ -4,7 +4,8 @@ import { loginUser } from '../../services/api';
 import { UsuarioSessao } from '../../types';
 
 interface LoginViewProps {
-  onLogin: (credentials: UsuarioSessao) => void;
+  /** precisaRedefinirSenha: senha ainda é a que o administrador cadastrou */
+  onLogin: (credentials: UsuarioSessao, precisaRedefinirSenha?: boolean) => void;
 }
 
 const EMAIL_SALVO = 'saved_user_email';
@@ -118,9 +119,9 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
           permissoes,
         };
 
-        // Senha provisória não é tratada aqui: ao entrar, o sistema abre o
-        // popup "Crie sua senha" por cima de tudo (ver App.tsx).
-        onLogin(sessao);
+        // A resposta do login é quem diz se a senha ainda é a provisória.
+        // Sendo, o sistema abre direto na tela de redefinir senha (App.tsx).
+        onLogin(sessao, !!result.precisa_trocar_senha);
       } catch {
         setErrorMessage('Não foi possível conectar ao servidor. Verifique sua internet e tente novamente.');
       } finally {

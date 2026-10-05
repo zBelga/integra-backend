@@ -80,7 +80,8 @@ async function apiFetch(input: string, init: RequestInit = {}): Promise<Response
   if (typeof init.body === 'string' && !temContentType) {
     headers['Content-Type'] = 'application/json';
   }
-  const res = await fetch(apiUrl(comEmpresaAtiva(input)), { ...init, headers });
+  // 'no-store': resposta de API depende de quem está logado — nunca reaproveitar
+  const res = await fetch(apiUrl(comEmpresaAtiva(input)), { cache: 'no-store', ...init, headers });
   if (res.status === 401) {
     clearToken();
     clearEmpresaAtiva();

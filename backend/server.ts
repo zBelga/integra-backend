@@ -30,12 +30,26 @@ async function startServer() {
   // Inicializa banco SQLite
   await getDb();
 
+  // Resposta de API nunca pode ficar em cache: ela depende de QUEM está logado
+  // e da empresa ativa. Com o ETag padrão do Express o navegador respondia 304
+  // e a tela seguia usando a resposta de um login anterior — foi assim que a
+  // janela de troca de senha deixou de aparecer.
+  app.set('etag', false);
+
   // ── Middleware global ──
   app.use(corsMiddleware);                          // CORS antes de tudo
   app.use(express.json({ limit: '15mb' }));         // base64 de até ~10MB
   app.use(express.urlencoded({ extended: true, limit: '15mb' }));
   app.use(applySecurityHeaders);
   app.use('/api/', rateLimiter(300, 60 * 1000));
+
+  // Nada de /api fica guardado no navegador nem em proxy
+  app.use('/api/', (_req, res, next) => {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    next();
+  });
 
   // ── Health check (público) — usado pelo Railway ──
   app.get('/api/health', (_req, res) => {
