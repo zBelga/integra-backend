@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, memo } from 'react';
 import { Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle, ShieldCheck, X, KeyRound, Check } from 'lucide-react';
-import { loginUser, trocarSenha } from '../../services/api';
+import { loginUser, trocarSenha, AVISO_SENHA } from '../../services/api';
 import { UsuarioSessao } from '../../types';
 
 interface LoginViewProps {
@@ -186,6 +186,20 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
 
   // Primeiro acesso: a senha veio do administrador e precisa ser trocada
   const [definindoSenha, setDefinindoSenha] = useState<UsuarioSessao | null>(null);
+
+  // Veio de volta porque o sistema está trancado até a senha ser trocada
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem(AVISO_SENHA)) {
+        sessionStorage.removeItem(AVISO_SENHA);
+        setErrorMessage(
+          'Sua senha ainda é a que o administrador cadastrou. Entre de novo para criar a sua.'
+        );
+      }
+    } catch {
+      /* ignora */
+    }
+  }, []);
 
   // Único efeito da tela: recupera o e-mail lembrado. Sem rede.
   useEffect(() => {
