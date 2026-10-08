@@ -968,6 +968,47 @@ export async function toggleDocumentoTipoStatus(
   return json;
 }
 
+/** Quem depende de um tipo: arquivos anexados e exigências por função. */
+export async function fetchUsoDocumentoTipo(id: string): Promise<{
+  success: boolean;
+  data: {
+    tipo: { id: string; nome: string; codigo: string };
+    documentos: number;
+    exigencias: number;
+    funcoes: string[];
+  };
+}> {
+  const res = await apiFetch(`/api/documento-tipos/${id}/uso`);
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Erro ao verificar o uso do tipo');
+  return json;
+}
+
+/**
+ * Exclui o tipo do catálogo de vez.
+ * O servidor recusa se houver arquivo anexado — nesse caso o caminho é desativar.
+ * `confirmar` libera a remoção das exigências por função junto.
+ */
+export async function deleteDocumentoTipo(
+  id: string,
+  confirmar = false
+): Promise<{ success: boolean; message?: string; data?: { id: string; exigencias_removidas: number } }> {
+  const res = await apiFetch(
+    `/api/documento-tipos/${id}${confirmar ? '?confirmar=true' : ''}`,
+    { method: 'DELETE' }
+  );
+  const json = await res.json();
+  if (!res.ok) {
+    const erro: any = new Error(json.error || 'Erro ao excluir o tipo');
+    erro.motivo = json.motivo;
+    erro.documentos = json.documentos;
+    erro.exigencias = json.exigencias;
+    erro.funcoes = json.funcoes;
+    throw erro;
+  }
+  return json;
+}
+
 export async function fetchFuncoesEmpresa(): Promise<{ success: boolean; data: FuncaoEmpresa[] }> {
   const res = await apiFetch('/api/documento-tipos/meta/funcoes');
   const json = await res.json();

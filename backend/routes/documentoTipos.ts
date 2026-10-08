@@ -61,6 +61,44 @@ function normalizar(texto: string): string {
   return String(texto || '').trim().toUpperCase();
 }
 
+/** Lê um tipo dentro da empresa (null se for de outra empresa ou não existir). */
+async function buscarTipo(sb: SupabaseClient, empresa_id: string, id: string) {
+  const { data } = await sb
+    .from('documento_tipos')
+    .select('id, nome, codigo, status')
+    .eq('id', id)
+    .eq('empresa_id', empresa_id)
+    .maybeSingle();
+  return data || null;
+}
+
+/**
+ * Quem depende deste tipo: arquivos anexados e exigências por função.
+ * Conta TODOS os documentos, inclusive os já excluídos pelo usuário, porque
+ * eles continuam no histórico e apontando para este tipo.
+ */
+async function contarUso(sb: SupabaseClient, empresa_id: string, tipoId: string) {
+  const [docs, exig] = await Promise.all([
+    sb
+      .from('documentos')
+      .select('id', { count: 'exact', head: true })
+      .eq('empresa_id', empresa_id)
+      .eq('tipo_id', tipoId),
+    sb
+      .from('documento_exigencias')
+      .select('funcao')
+      .eq('empresa_id', empresa_id)
+      .eq('tipo_id', tipoId),
+  ]);
+
+  const funcoes = Array.from(new Set((exig.data || []).map((e: any) => e.funcao))).sort();
+  return {
+    documentos: docs.count || 0,
+    exigencias: (exig.data || []).length,
+    funcoes,
+  };
+}
+
 /** Registra no histórico. Falha aqui nunca derruba a operação principal. */
 async function registrarHistorico(
   sb: SupabaseClient,
@@ -611,6 +649,110 @@ router.patch('/:id/status', async (req: Request, res: Response) => {
     );
 
     res.json({ success: true, data, arquivos_preservados: count || 0 });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * GET /api/documento-tipos/:id/uso — quem depende deste tipo.
+ * A tela chama antes de abrir a confirmação de exclusão.
+ */
+router.get('/:id/uso', async (req: Request, res: Response) => {
+  try {
+    if (!(await podeTipos(req))) return bloqueado(res);
+    const empresa_id = empresaDoPedido(req);
+    const sb = getSupabase();
+
+    const tipo = await buscarTipo(sb, empresa_id, req.params.id);
+    if (!tipo) return res.status(404).json({ success: false, error: 'Tipo não encontrado.' });
+
+    const uso = await contarUso(sb, empresa_id, req.params.id);
+    res.json({ success: true, data: { tipo: { id: tipo.id, nome: tipo.nome, codigo: tipo.codigo }, ...uso } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * DELETE /api/documento-tipos/:id — apaga o tipo do catálogo de vez.
+ *
+ * Regra de ouro deste arquivo continua valendo: NENHUM arquivo é apagado.
+ * Por isso a exclusão é recusada enquanto existir qualquer documento
+ * anexado com este tipo — nesse caso o caminho é desativar, que preserva
+ * tudo. Só as REGRAS de obrigatoriedade por função são removidas junto, e
+ * mesmo assim apenas com confirmação explícita (?confirmar=true).
+ */
+router.delete('/:id', async (req: Request, res: Response) => {
+  try {
+    if (!(await podeTipos(req))) return bloqueado(res);
+
+    const empresa_id = empresaDoPedido(req);
+    if (!empresa_id) return res.status(400).json({ success: false, error: 'Empresa não identificada.' });
+
+    const sb = getSupabase();
+    const tipo = await buscarTipo(sb, empresa_id, req.params.id);
+    if (!tipo) return res.status(404).json({ success: false, error: 'Tipo não encontrado.' });
+
+    const uso = await contarUso(sb, empresa_id, req.params.id);
+
+    // Tem arquivo anexado: não se apaga. Desativar preserva tudo.
+    if (uso.documentos > 0) {
+      return res.status(409).json({
+        success: false,
+        error:
+          `"${tipo.nome}" não pode ser excluído porque já tem ${uso.documentos} arquivo(s) ` +
+          `anexado(s) a colaboradores. Desative o tipo: ele some das listas e deixa de contar ` +
+          `como pendência, e os arquivos continuam guardados.`,
+        motivo: 'em_uso',
+        ...uso,
+      });
+    }
+
+    // Tem regra por função: só apaga se a tela confirmou
+    const confirmado = String(req.query.confirmar || '') === 'true';
+    if (uso.exigencias > 0 && !confirmado) {
+      return res.status(409).json({
+        success: false,
+        error:
+          `"${tipo.nome}" é exigido em ${uso.funcoes.length} função(ões): ` +
+          `${uso.funcoes.join(', ')}. Excluir também remove essa exigência.`,
+        motivo: 'precisa_confirmar',
+        ...uso,
+      });
+    }
+
+    if (uso.exigencias > 0) {
+      const { error } = await sb
+        .from('documento_exigencias')
+        .delete()
+        .eq('empresa_id', empresa_id)
+        .eq('tipo_id', req.params.id);
+      if (error) throw error;
+    }
+
+    const { error: erroExclusao } = await sb
+      .from('documento_tipos')
+      .delete()
+      .eq('id', req.params.id)
+      .eq('empresa_id', empresa_id);
+    if (erroExclusao) throw erroExclusao;
+
+    await registrarHistorico(
+      sb,
+      req,
+      'tipo',
+      tipo.id,
+      'excluido',
+      `${tipo.nome} (${tipo.codigo}) removido do catálogo` +
+        (uso.exigencias > 0 ? ` — exigência retirada de ${uso.funcoes.length} função(ões)` : '')
+    );
+
+    res.json({
+      success: true,
+      message: `"${tipo.nome}" foi excluído do catálogo.`,
+      data: { id: tipo.id, exigencias_removidas: uso.exigencias },
+    });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }

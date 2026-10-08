@@ -7,6 +7,9 @@
  * REGRA DE OURO: desativar um tipo NUNCA apaga arquivo nem histórico. Ele só
  * deixa de ser exigido e some das listas de seleção. Ao desativar, a tela
  * informa quantos arquivos continuam guardados.
+ *
+ * Excluir de vez também existe, mas só para tipo que ninguém usou: se houver
+ * qualquer arquivo anexado, o servidor recusa e a tela manda desativar.
  */
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
@@ -21,12 +24,16 @@ import {
   ShieldCheck,
   CalendarClock,
   Info,
+  Trash2,
+  Loader2,
 } from 'lucide-react';
 import {
   fetchDocumentoTipos,
   createDocumentoTipo,
   updateDocumentoTipo,
   toggleDocumentoTipoStatus,
+  fetchUsoDocumentoTipo,
+  deleteDocumentoTipo,
 } from '../../services/api';
 import type { DocumentoTipo, DocumentoTipoFormData } from '../../types';
 import { iconeDoTipo } from '../../constants/documentosUI';
@@ -293,6 +300,129 @@ function TipoModal({
 // Tela
 // ─────────────────────────────────────────────────────────────
 
+/**
+ * Confirmação de exclusão de um tipo.
+ *
+ * Mostra antes quem depende dele. Com arquivo anexado o botão nem existe:
+ * o caminho ali é desativar, que preserva tudo.
+ */
+function ConfirmarExclusao({
+  estado,
+  onFechar,
+  onConfirmar,
+}: {
+  estado: {
+    tipo: DocumentoTipo;
+    carregando: boolean;
+    documentos: number;
+    exigencias: number;
+    funcoes: string[];
+    erro: string;
+    salvando: boolean;
+  };
+  onFechar: () => void;
+  onConfirmar: () => void;
+}) {
+  const { tipo, carregando, documentos, exigencias, funcoes, erro, salvando } = estado;
+  const temArquivos = documentos > 0;
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-[#0B1620]/80">
+      <div className="bg-white rounded-2xl w-full max-w-[440px] shadow-2xl overflow-hidden">
+        <div className="px-6 pt-6 pb-5">
+          <div
+            className={`w-11 h-11 rounded-xl flex items-center justify-center mb-4 ${
+              temArquivos ? 'bg-[#FEF3E0] border border-[#F8D99B]' : 'bg-[#FDEBEC] border border-[#F5C6CA]'
+            }`}
+          >
+            {temArquivos ? (
+              <AlertCircle className="w-5 h-5 text-[#A9690A]" aria-hidden="true" />
+            ) : (
+              <Trash2 className="w-5 h-5 text-[#D64550]" aria-hidden="true" />
+            )}
+          </div>
+
+          <h2 className="text-lg font-bold text-[#17212B]">
+            {temArquivos ? 'Este tipo não pode ser excluído' : `Excluir "${tipo.nome}"?`}
+          </h2>
+
+          {carregando ? (
+            <p className="flex items-center gap-2 text-xs text-[#687582] mt-3">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
+              Verificando se alguém usa este tipo...
+            </p>
+          ) : temArquivos ? (
+            <div className="mt-3 space-y-3 text-xs text-[#687582] leading-relaxed">
+              <p>
+                <strong className="text-[#17212B]">{documentos} arquivo(s)</strong> já foram anexados a
+                colaboradores com este tipo. Excluir o tipo deixaria esses arquivos órfãos, então o
+                sistema não permite.
+              </p>
+              <p>
+                Use <strong className="text-[#17212B]">Desativar</strong>: o tipo some das listas e deixa
+                de contar como pendência, e os arquivos continuam guardados no histórico.
+              </p>
+            </div>
+          ) : (
+            <div className="mt-3 space-y-3 text-xs text-[#687582] leading-relaxed">
+              <p>
+                Nenhum arquivo foi anexado com este tipo, então nada de colaborador se perde.
+                O tipo sai do catálogo e não dá para desfazer — se quiser de volta, terá que cadastrar
+                de novo.
+              </p>
+              {exigencias > 0 && (
+                <div className="px-3 py-2.5 bg-[#FEF3E0] border border-[#F8D99B] rounded-xl text-[#A9690A]">
+                  Ele é exigido em <strong>{funcoes.length} função(ões)</strong>: {funcoes.join(', ')}.
+                  Essa exigência será retirada junto.
+                </div>
+              )}
+            </div>
+          )}
+
+          {erro && (
+            <div
+              className="flex items-start gap-2 mt-4 px-3 py-2.5 bg-[#FDEBEC] border border-[#F5C6CA] rounded-xl text-xs text-[#A32B36]"
+              role="alert"
+            >
+              <AlertCircle className="w-4 h-4 shrink-0 mt-px" aria-hidden="true" />
+              <span>{erro}</span>
+            </div>
+          )}
+        </div>
+
+        <div className="px-6 py-4 bg-[#F8FAFB] border-t border-[#E4E9ED] flex items-center justify-end gap-2">
+          <button
+            onClick={onFechar}
+            disabled={salvando}
+            className="px-4 py-2 text-xs font-semibold text-[#17212B] bg-white border border-[#DDE3E8] hover:bg-[#F4F6F8] rounded-xl transition-colors cursor-pointer disabled:opacity-50"
+          >
+            {temArquivos ? 'Entendi' : 'Cancelar'}
+          </button>
+          {!temArquivos && !carregando && (
+            <button
+              onClick={onConfirmar}
+              disabled={salvando}
+              className="flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-[#D64550] hover:bg-[#bd3b45] rounded-xl transition-colors cursor-pointer disabled:opacity-50"
+            >
+              {salvando ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
+                  Excluindo...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+                  Excluir definitivamente
+                </>
+              )}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export const TiposDocumentoView: React.FC = () => {
   const [tipos, setTipos] = useState<DocumentoTipo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -302,6 +432,16 @@ export const TiposDocumentoView: React.FC = () => {
   const [aviso, setAviso] = useState('');
   const [erro, setErro] = useState('');
   const [ocupadoId, setOcupadoId] = useState<string | null>(null);
+  /** Tipo na fila de exclusão, com quem depende dele */
+  const [excluindo, setExcluindo] = useState<{
+    tipo: DocumentoTipo;
+    carregando: boolean;
+    documentos: number;
+    exigencias: number;
+    funcoes: string[];
+    erro: string;
+    salvando: boolean;
+  } | null>(null);
 
   const carregar = useCallback(async () => {
     setIsLoading(true);
@@ -353,6 +493,44 @@ export const TiposDocumentoView: React.FC = () => {
       setErro(err.message || 'Não foi possível alterar o status.');
     } finally {
       setOcupadoId(null);
+    }
+  };
+
+  /** Abre a confirmação já sabendo quem depende do tipo. */
+  const pedirExclusao = async (t: DocumentoTipo) => {
+    setErro('');
+    setExcluindo({ tipo: t, carregando: true, documentos: 0, exigencias: 0, funcoes: [], erro: '', salvando: false });
+    try {
+      const res = await fetchUsoDocumentoTipo(t.id);
+      setExcluindo({
+        tipo: t,
+        carregando: false,
+        documentos: res.data.documentos,
+        exigencias: res.data.exigencias,
+        funcoes: res.data.funcoes || [],
+        erro: '',
+        salvando: false,
+      });
+    } catch (err: any) {
+      setExcluindo(prev =>
+        prev ? { ...prev, carregando: false, erro: err.message || 'Não foi possível verificar o uso do tipo.' } : prev
+      );
+    }
+  };
+
+  const confirmarExclusao = async () => {
+    if (!excluindo) return;
+    const t = excluindo.tipo;
+    setExcluindo(prev => (prev ? { ...prev, salvando: true, erro: '' } : prev));
+    try {
+      const res = await deleteDocumentoTipo(t.id, true);
+      setTipos(prev => prev.filter(x => x.id !== t.id));
+      setExcluindo(null);
+      setAviso(res.message || `"${t.nome}" foi excluído do catálogo.`);
+    } catch (err: any) {
+      setExcluindo(prev =>
+        prev ? { ...prev, salvando: false, erro: err.message || 'Não foi possível excluir o tipo.' } : prev
+      );
     }
   };
 
@@ -530,6 +708,15 @@ export const TiposDocumentoView: React.FC = () => {
                     >
                       <Power className="w-3 h-3" /> {inativo ? 'Reativar' : 'Desativar'}
                     </button>
+                    <button
+                      onClick={() => pedirExclusao(t)}
+                      disabled={ocupadoId === t.id}
+                      title={`Excluir "${t.nome}" do catálogo`}
+                      aria-label={`Excluir ${t.nome}`}
+                      className="px-2.5 py-2 border border-[#DDE3E8] text-[#687582] hover:border-[#D64550] hover:text-[#D64550] hover:bg-[#FDEBEC] rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
                   </div>
                 </div>
               );
@@ -537,6 +724,14 @@ export const TiposDocumentoView: React.FC = () => {
           </div>
         )}
       </div>
+
+      {excluindo && (
+        <ConfirmarExclusao
+          estado={excluindo}
+          onFechar={() => setExcluindo(null)}
+          onConfirmar={confirmarExclusao}
+        />
+      )}
 
       {modal.aberto && (
         <TipoModal
