@@ -1,6 +1,18 @@
-import ExcelJS from 'exceljs';
 import { Admissao, Obra } from '../types';
 import { applyCPFMask, formatDateBR, unmaskCPF } from './cpfMask';
+
+/**
+ * O ExcelJS pesa quase 1 MB e só é usado quando alguém importa ou exporta
+ * planilha. Por isso ele é buscado no momento do clique, e não junto com o
+ * sistema — assim o login e as telas do dia a dia abrem sem carregá-lo.
+ * O arquivo fica em cache do navegador depois da primeira vez.
+ */
+let excelPendente: Promise<any> | null = null;
+async function carregarExcelJS() {
+  if (!excelPendente) excelPendente = import('exceljs');
+  const mod = await excelPendente;
+  return (mod.default ?? mod) as any;
+}
 
 // Helper to download binary blob
 export function downloadBlob(blob: Blob, filename: string) {
@@ -16,6 +28,7 @@ export function downloadBlob(blob: Blob, filename: string) {
 
 // Export admissions to .xlsx
 export async function exportAdmissoesToExcel(admissoes: Admissao[], filename = 'Admissoes.xlsx') {
+  const ExcelJS = await carregarExcelJS();
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'Sistema Administrativo RH';
   workbook.created = new Date();
@@ -109,6 +122,7 @@ export async function exportAdmissoesToExcel(admissoes: Admissao[], filename = '
 
 // Generate an empty template for importing
 export async function generateTemplateExcel() {
+  const ExcelJS = await carregarExcelJS();
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet('Modelo de Importação');
 
@@ -229,6 +243,7 @@ export async function parseExcelFile(
   fileBuffer: ArrayBuffer,
   existingObras: Obra[]
 ): Promise<ParsedImportRow[]> {
+  const ExcelJS = await carregarExcelJS();
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(fileBuffer);
 

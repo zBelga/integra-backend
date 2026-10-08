@@ -1,20 +1,48 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { ActiveView, Empresa, PermissoesUsuario, UsuarioSessao } from './types';
 import { Header } from './components/layout/Header';
 import { LeftSidebar } from './components/layout/LeftSidebar';
-import { Dashboard } from './components/dashboard/Dashboard';
-import { AdministrativoView } from './components/administrativo/AdministrativoView';
-import { AdminSubModuleView } from './components/administrativo/AdminSubModules';
-import { UsuariosMasterView } from './components/usuarios/UsuariosMasterView';
 import { EmpresaSelection } from './components/empresa/EmpresaSelection';
-import { PermissoesConfigView } from './components/permissoes/PermissoesConfigView';
-import { SolicitacoesView } from './components/solicitacoes/SolicitacoesView';
+import { Dashboard } from './components/dashboard/Dashboard';
 import { LoginView } from './components/auth/LoginView';
 import { RedefinirSenhaView } from './components/auth/RedefinirSenhaView';
-import { DocumentosView } from './components/documentos/DocumentosView';
-import { TiposDocumentoView } from './components/documentos/TiposDocumentoView';
-import { DocumentosPorFuncaoView } from './components/documentos/DocumentosPorFuncaoView';
 import { Toast, ToastMessage } from './components/ui/Toast';
+
+/**
+ * Telas pesadas carregadas só quando alguém entra nelas.
+ *
+ * Antes, abrir o login já baixava o sistema inteiro — perfil do colaborador,
+ * gestão de usuários, matriz de permissões, tipos de documento. Agora cada
+ * uma vira um arquivo separado, buscado no primeiro acesso àquela tela e
+ * guardado no cache do navegador. O que todo mundo usa sempre (login, seleção
+ * de empresa, painel, menu) continua vindo junto, sem espera.
+ */
+const AdministrativoView = lazy(() =>
+  import('./components/administrativo/AdministrativoView').then(m => ({ default: m.AdministrativoView })));
+const AdminSubModuleView = lazy(() =>
+  import('./components/administrativo/AdminSubModules').then(m => ({ default: m.AdminSubModuleView })));
+const UsuariosMasterView = lazy(() =>
+  import('./components/usuarios/UsuariosMasterView').then(m => ({ default: m.UsuariosMasterView })));
+const PermissoesConfigView = lazy(() =>
+  import('./components/permissoes/PermissoesConfigView').then(m => ({ default: m.PermissoesConfigView })));
+const SolicitacoesView = lazy(() =>
+  import('./components/solicitacoes/SolicitacoesView').then(m => ({ default: m.SolicitacoesView })));
+const DocumentosView = lazy(() =>
+  import('./components/documentos/DocumentosView').then(m => ({ default: m.DocumentosView })));
+const TiposDocumentoView = lazy(() =>
+  import('./components/documentos/TiposDocumentoView').then(m => ({ default: m.TiposDocumentoView })));
+const DocumentosPorFuncaoView = lazy(() =>
+  import('./components/documentos/DocumentosPorFuncaoView').then(m => ({ default: m.DocumentosPorFuncaoView })));
+
+/** Enquanto o arquivo da tela chega (normalmente alguns milissegundos). */
+const CarregandoTela: React.FC = () => (
+  <div className="flex-1 flex items-center justify-center p-16">
+    <div className="text-center">
+      <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-[#176B87] border-t-transparent" />
+      <p className="mt-3 text-xs text-[#687582]">Carregando...</p>
+    </div>
+  </div>
+);
 import {
   fetchEmpresas,
   createEmpresa,
@@ -323,7 +351,7 @@ export default function App() {
 
         <main className="flex-1">
           {telaBloqueada && <AcessoRestrito onVoltar={() => setCurrentView('dashboard')} />}
-          {!telaBloqueada && (<>
+          {!telaBloqueada && (<Suspense fallback={<CarregandoTela />}>
           {currentView === 'empresas' && (
             <EmpresaSelection
               empresas={empresas}
@@ -390,7 +418,7 @@ export default function App() {
               onNavigate={setCurrentView}
             />
           )}
-          </>)}
+          </Suspense>)}
         </main>
 
         <Toast toast={toast} onClose={() => setToast(null)} />

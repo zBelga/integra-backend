@@ -1,8 +1,17 @@
 import { Router, Request, Response } from 'express';
 import { queryRows, executeQuery } from '../db.js';
 
-import { somenteMaster } from '../utils/permissoes.js';
+import { somenteMaster, limparCachePermissoes } from '../utils/permissoes.js';
 const router = Router();
+
+/**
+ * Qualquer gravação aqui pode mudar o que um cargo enxerga. O cache de
+ * permissões é esquecido na hora, para a alteração valer já no próximo clique.
+ */
+router.use((req, _res, next) => {
+  if (req.method !== 'GET') limparCachePermissoes();
+  next();
+});
 
 const MASTER_EMAIL = 'fabriciooliveira2431@gmail.com';
 

@@ -1,9 +1,18 @@
 import { Router, Request, Response } from 'express';
 import { queryRows, executeQuery, saveDbToDisk } from '../db.js';
 
-import { somenteMaster } from '../utils/permissoes.js';
+import { somenteMaster, limparCachePermissoes } from '../utils/permissoes.js';
 import { CATALOGO, ACOES_TELA, todasAsChaves, buscarTela } from '../utils/catalogoPermissoes.js';
 const router = Router();
+
+/**
+ * Qualquer gravação aqui pode mudar o que um cargo enxerga. O cache de
+ * permissões é esquecido na hora, para a alteração valer já no próximo clique.
+ */
+router.use((req, _res, next) => {
+  if (req.method !== 'GET') limparCachePermissoes();
+  next();
+});
 
 // GET /api/permissoes - List permissions by empresa_id and/or cargo_id
 router.get('/', somenteMaster, async (req: Request, res: Response) => {

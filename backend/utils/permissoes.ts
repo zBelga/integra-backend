@@ -66,12 +66,58 @@ function lerExtras(texto: any): Record<string, boolean> {
   }
 }
 
+// ─────────────────────────────────────────────────────────────
+// Cache das permissões (memória do servidor)
+// ─────────────────────────────────────────────────────────────
+//
+// Sem cache, CADA chamada da API fazia duas viagens ao banco antes da
+// consulta de verdade: uma para descobrir o cargo do usuário e outra para ler
+// as telas desse cargo. Abrir o Efetivo custava 4 idas ao Supabase, quando 2
+// bastavam.
+//
+// Agora o resultado fica guardado por pouco tempo e é apagado na hora em que
+// alguém salva permissões ou troca o cargo de um usuário — então a mudança
+// aparece na mesma hora, como antes. O cache é por processo: se o Railway
+// reiniciar ou subir outra instância, ele simplesmente nasce vazio.
+
+const VALIDADE_CACHE_MS = 60_000;
+
+const cacheCargoPorUsuario = new Map<string, { valor: string; ate: number }>();
+const cacheTelasPorCargo = new Map<string, { valor: MapaTelas; ate: number }>();
+
+function lerCache<T>(mapa: Map<string, { valor: T; ate: number }>, chave: string): T | undefined {
+  const item = mapa.get(chave);
+  if (!item) return undefined;
+  if (Date.now() > item.ate) { mapa.delete(chave); return undefined; }
+  return item.valor;
+}
+
+function gravarCache<T>(mapa: Map<string, { valor: T; ate: number }>, chave: string, valor: T) {
+  mapa.set(chave, { valor, ate: Date.now() + VALIDADE_CACHE_MS });
+}
+
+/**
+ * Esquece o que está guardado. Chamado sempre que permissões, cargos ou o
+ * cargo de um usuário mudam, para a alteração valer no próximo clique.
+ */
+export function limparCachePermissoes(cargoId?: string) {
+  if (cargoId) cacheTelasPorCargo.delete(String(cargoId));
+  else cacheTelasPorCargo.clear();
+  cacheCargoPorUsuario.clear();
+}
+
 /** Cargo do usuário logado (id da tabela cargos), lido pelo id do token. */
 async function cargoDoUsuario(req: Request): Promise<string> {
   const userId = req.user?.id;
   if (!userId) return '';
+
+  const guardado = lerCache(cacheCargoPorUsuario, userId);
+  if (guardado !== undefined) return guardado;
+
   const linhas = (await queryRows('SELECT cargo_id FROM usuarios WHERE id = ?', [userId])) as any[];
-  return String(linhas[0]?.cargo_id || '');
+  const cargo = String(linhas[0]?.cargo_id || '');
+  gravarCache(cacheCargoPorUsuario, userId, cargo);
+  return cargo;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -157,6 +203,12 @@ export async function telasDoUsuario(req: Request): Promise<MapaTelas> {
   try {
     const cargoId = await cargoDoUsuario(req);
     if (cargoId) {
+      const guardado = lerCache(cacheTelasPorCargo, cargoId);
+      if (guardado) {
+        (req as any)._telasCache = guardado;
+        return guardado;
+      }
+
       const linhas = (await queryRows(
         'SELECT modulo, tela, ver, criar, editar, excluir, extras FROM cargos_telas WHERE cargo_id = ?',
         [cargoId]
@@ -176,8 +228,11 @@ export async function telasDoUsuario(req: Request): Promise<MapaTelas> {
       } else {
         mapa = await telasDaMatrizAntiga(cargoId);
       }
+
+      gravarCache(cacheTelasPorCargo, cargoId, mapa);
     }
   } catch {
+    // Falha de leitura nunca vira permissão — e nunca é guardada no cache.
     mapa = {};
   }
 

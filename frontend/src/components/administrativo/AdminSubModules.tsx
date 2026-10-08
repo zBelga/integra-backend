@@ -5,6 +5,7 @@ import { updateColaborador } from '../../services/api';
 import { Colaborador } from '../../types';
 import { fetchColaboradores } from '../../services/api';
 import { applyCPFMask, formatDateBR } from '../../utils/cpfMask';
+import { useDebounce } from '../../utils/debounce';
 
 interface AdminSubModuleViewProps {
   section: 'efetivo' | 'desligados' | 'ferias';
@@ -66,6 +67,12 @@ export const AdminSubModuleView: React.FC<AdminSubModuleViewProps> = ({
   const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
+  /**
+   * O que foi digitado só vira consulta depois de uma pausa. Antes, cada tecla
+   * disparava uma busca no banco — digitar "SILVA" custava cinco consultas e as
+   * respostas chegavam fora de ordem. O campo continua respondendo na hora.
+   */
+  const buscaAplicada = useDebounce(search, 350);
   const [editingCol, setEditingCol] = useState<Colaborador | null>(null);
   const [colunas, setColunas] = useState<Record<ColunaId, boolean>>(lerColunasSalvas);
   const [menuColunas, setMenuColunas] = useState(false);
@@ -109,7 +116,7 @@ export const AdminSubModuleView: React.FC<AdminSubModuleViewProps> = ({
   const loadColaboradores = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await fetchColaboradores({ search, limit: 500 });
+      const res = await fetchColaboradores({ search: buscaAplicada, limit: 500 });
       setColaboradores(res.data);
       setTotal(res.pagination.total);
     } catch {
@@ -117,7 +124,7 @@ export const AdminSubModuleView: React.FC<AdminSubModuleViewProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [search]);
+  }, [buscaAplicada]);
 
   const handleSaveCol = async (id: string, data: Partial<Colaborador>) => {
     await updateColaborador(id, data);
