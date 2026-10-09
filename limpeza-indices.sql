@@ -1,10 +1,9 @@
--- ÍNTEGRA — limpeza de índices duplicados
+-- ÍNTEGRA — índices: limpeza e ajuste
 -- Cole no Supabase > SQL Editor e execute.
---
--- Cada índice abaixo precisava ser reescrito a cada INSERT/UPDATE da tabela,
--- mas não atendia nenhuma consulta que outro índice já não atendesse.
--- Ao lado de cada um está quem continua cobrindo aquela busca.
 
+-- 1) Índices duplicados. Cada um era reescrito a cada INSERT/UPDATE da tabela
+--    sem atender nenhuma consulta que outro índice já não atendesse.
+--    Ao lado, quem continua cobrindo aquela busca.
 drop index if exists public.idx_admissoes_cpf;            -- admissoes_cpf_key (unique)
 drop index if exists public.idx_cargos_empresa_id;        -- cargos_empresa_id_nome_key
 drop index if exists public.idx_permissoes_cargo_modulo;  -- cargos_permissoes_cargo_id_modulo_key
@@ -15,10 +14,11 @@ drop index if exists public.idx_solicitacoes_empresa;     -- solicitacoes_empres
 drop index if exists public.idx_usuarios_email;           -- usuarios_email_key (unique)
 drop index if exists public.idx_usuarios_empresa_id;      -- usuarios_empresa_idx
 
--- Falta um índice para a ordenação da lista do Efetivo
--- (WHERE empresa_id = ? ORDER BY created_at DESC).
-create index if not exists colaboradores_empresa_recentes
-  on public.colaboradores (empresa_id, created_at desc);
+-- 2) O Efetivo agora lista em ordem alfabética
+--    (WHERE empresa_id = ? ORDER BY nome ASC). Sem este índice o banco
+--    reordena a lista inteira a cada abertura da tela.
+create index if not exists colaboradores_empresa_nome
+  on public.colaboradores (empresa_id, nome);
 
 -- Conferência: deve sobrar apenas idx_admissoes_obra_id e idx_solicitacoes_status.
 select indexname from pg_indexes

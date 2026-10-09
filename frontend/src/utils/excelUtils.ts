@@ -120,6 +120,84 @@ export async function exportAdmissoesToExcel(admissoes: Admissao[], filename = '
   downloadBlob(blob, filename);
 }
 
+/**
+ * Exporta o efetivo para planilha.
+ *
+ * Leva o que está na tela, já filtrado pela busca, na mesma ordem. Os
+ * vencimentos (44 e 89 dias da admissão, e 1 ano do ASO) vão calculados, para
+ * a planilha servir sozinha fora do sistema.
+ */
+export async function exportEfetivoToExcel(
+  colaboradores: {
+    numero_chapa?: string; nome?: string; funcao?: string; cpf?: string; rg?: string;
+    obra_nome?: string; data_admissao?: string; data_aso?: string;
+  }[],
+  filename = 'Efetivo.xlsx'
+) {
+  const ExcelJS = await carregarExcelJS();
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'Sistema Íntegra';
+  workbook.created = new Date();
+
+  const worksheet = workbook.addWorksheet('Efetivo');
+
+  worksheet.columns = [
+    { header: 'Registro', key: 'chapa', width: 12 },
+    { header: 'Nome Completo', key: 'nome', width: 38 },
+    { header: 'Função', key: 'funcao', width: 28 },
+    { header: 'CPF', key: 'cpf', width: 18 },
+    { header: 'RG', key: 'rg', width: 18 },
+    { header: 'Obra', key: 'obra', width: 26 },
+    { header: 'Admissão', key: 'admissao', width: 14 },
+    { header: '1º Vencimento', key: 'venc1', width: 15 },
+    { header: '2º Vencimento', key: 'venc2', width: 15 },
+    { header: 'ASO', key: 'aso', width: 14 },
+    { header: 'ASO Vencimento', key: 'asoVenc', width: 16 },
+  ];
+
+  const headerRow = worksheet.getRow(1);
+  headerRow.height = 26;
+  headerRow.eachCell((cell: any) => {
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF176B87' } };
+    cell.font = { name: 'Calibri', bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+  });
+
+  const somarDias = (iso?: string, dias = 0) => {
+    if (!iso) return '';
+    const d = new Date(iso + 'T00:00:00');
+    if (isNaN(d.getTime())) return '';
+    d.setDate(d.getDate() + dias);
+    return formatDateBR(d.toISOString().split('T')[0]);
+  };
+
+  colaboradores.forEach(c => {
+    worksheet.addRow({
+      chapa: c.numero_chapa || '',
+      nome: c.nome || '',
+      funcao: c.funcao || '',
+      cpf: applyCPFMask(c.cpf || ''),
+      rg: c.rg || '',
+      obra: c.obra_nome || '',
+      admissao: c.data_admissao ? formatDateBR(c.data_admissao) : '',
+      venc1: somarDias(c.data_admissao, 44),
+      venc2: somarDias(c.data_admissao, 89),
+      aso: c.data_aso ? formatDateBR(c.data_aso) : '',
+      asoVenc: somarDias(c.data_aso, 364),
+    });
+  });
+
+  // Cabeçalho fixo ao rolar e filtro automático nas colunas
+  worksheet.views = [{ state: 'frozen', ySplit: 1 }];
+  worksheet.autoFilter = { from: 'A1', to: { row: 1, column: worksheet.columns.length } };
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+  downloadBlob(blob, filename);
+}
+
 // Generate an empty template for importing
 export async function generateTemplateExcel() {
   const ExcelJS = await carregarExcelJS();

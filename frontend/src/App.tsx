@@ -389,8 +389,8 @@ export default function App() {
             <div className="flex-1 overflow-y-auto p-6">
               <AdminSubModuleView
                 section="efetivo"
-                obras={[]}
                 onBackToAdmissao={() => setCurrentView('administrativo')}
+                permissoes={permissoes}
               />
             </div>
           )}

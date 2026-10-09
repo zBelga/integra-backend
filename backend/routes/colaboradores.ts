@@ -37,12 +37,19 @@ router.get('/', exigirAlgumaTela(['administrativo.efetivo', 'administrativo.efet
     const countRes = await queryRows(`SELECT COUNT(*) as total FROM colaboradores c ${whereSQL}`, params);
     const total = countRes[0]?.total || 0;
 
+    // Ordem da lista. O padrão é alfabético — é assim que se procura alguém
+    // numa lista de pessoas. `?ordenar=recentes` devolve os mais novos
+    // primeiro, para quem precisar do comportamento antigo.
+    const ordem = String(req.query.ordenar || '') === 'recentes'
+      ? 'c.created_at DESC'
+      : 'c.nome ASC';
+
     const rows = await queryRows(`
       SELECT c.*, o.nome as obra_nome, o.codigo as obra_codigo
       FROM colaboradores c
       LEFT JOIN obras o ON c.obra_id = o.id
       ${whereSQL}
-      ORDER BY c.created_at DESC
+      ORDER BY ${ordem}
       LIMIT ? OFFSET ?
     `, [...params, limit, offset]);
 

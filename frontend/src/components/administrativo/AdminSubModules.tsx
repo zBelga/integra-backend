@@ -1,18 +1,24 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { ArrowLeft, Users, Search, Edit2, FileText, Columns3, Check } from 'lucide-react';
+import { ArrowLeft, Users, Search, Edit2, FileText, Columns3, Check, Download } from 'lucide-react';
 import { EditColaboradorModal } from './EditColaboradorModal';
-import { updateColaborador } from '../../services/api';
-import { Colaborador } from '../../types';
-import { fetchColaboradores } from '../../services/api';
+import { updateColaborador, fetchColaboradores, fetchObras } from '../../services/api';
+import { Colaborador, PermissoesUsuario } from '../../types';
 import { applyCPFMask, formatDateBR } from '../../utils/cpfMask';
 import { useDebounce } from '../../utils/debounce';
+import { podeExtra } from '../../utils/permissoes';
+
+type ObraSimples = { id: string; nome: string; codigo: string };
 
 interface AdminSubModuleViewProps {
   section: 'efetivo' | 'desligados' | 'ferias';
-  obras: { id: string; nome: string; codigo: string }[];
+  /** Lista pronta de obras. Sem ela, a tela busca sozinha. */
+  obras?: ObraSimples[];
   onBackToAdmissao: () => void;
   onOpenPerfil?: (colaborador: Colaborador) => void;
+  permissoes?: PermissoesUsuario | null;
 }
+
+const TELA_EFETIVO = 'administrativo.efetivo';
 
 /**
  * Colunas que o usuário pode ligar/desligar no Efetivo.
@@ -59,11 +65,23 @@ function addDays(dateStr: string, days: number): string {
 
 export const AdminSubModuleView: React.FC<AdminSubModuleViewProps> = ({
   section,
-  obras,
+  obras: obrasRecebidas,
   onBackToAdmissao,
   onOpenPerfil,
+  permissoes,
 }) => {
   const [colaboradores, setColaboradores] = useState<Colaborador[]>([]);
+  /**
+   * Obras para o campo "Obra" do Editar Colaborador.
+   *
+   * Antes a tela dependia de receber a lista pronta de quem a abrisse — e
+   * quem a abre pelo menu passava uma lista vazia, então o campo nunca tinha
+   * o que mostrar. Agora ela busca por conta própria quando não recebe nada.
+   */
+  const [obrasCarregadas, setObrasCarregadas] = useState<ObraSimples[]>([]);
+  const obras = obrasRecebidas?.length ? obrasRecebidas : obrasCarregadas;
+  const [exportando, setExportando] = useState(false);
+  const podeExportar = !permissoes || podeExtra(permissoes, TELA_EFETIVO, 'exportar');
   const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -132,9 +150,32 @@ export const AdminSubModuleView: React.FC<AdminSubModuleViewProps> = ({
     await loadColaboradores();
   };
 
+  /** Leva para a planilha exatamente o que está na tela, na mesma ordem. */
+  const exportarPlanilha = async () => {
+    if (exportando || !colaboradores.length) return;
+    setExportando(true);
+    try {
+      const { exportEfetivoToExcel } = await import('../../utils/excelUtils');
+      const hoje = new Date().toISOString().split('T')[0];
+      await exportEfetivoToExcel(colaboradores, `Efetivo-${hoje}.xlsx`);
+    } finally {
+      setExportando(false);
+    }
+  };
+
   useEffect(() => {
     if (section === 'efetivo') loadColaboradores();
   }, [section, loadColaboradores]);
+
+  // Busca as obras uma vez, só se não vieram prontas de quem abriu a tela.
+  useEffect(() => {
+    if (section !== 'efetivo' || obrasRecebidas?.length) return;
+    let ativo = true;
+    fetchObras()
+      .then(res => { if (ativo && res.success) setObrasCarregadas(res.data); })
+      .catch(() => { /* sem obras: o campo fica vazio, como antes */ });
+    return () => { ativo = false; };
+  }, [section, obrasRecebidas]);
 
   if (section === 'desligados') {
     return (
@@ -195,6 +236,23 @@ export const AdminSubModuleView: React.FC<AdminSubModuleViewProps> = ({
               className="pl-8 pr-3 py-2 text-xs border border-[#DDE3E8] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#176B87] w-52"
             />
           </div>
+
+          {podeExportar && (
+            <button
+              type="button"
+              onClick={exportarPlanilha}
+              disabled={exportando || !colaboradores.length}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium border rounded-lg transition-colors cursor-pointer bg-white border-[#DDE3E8] text-[#687582] hover:text-[#17212B] hover:border-[#C6CFD6] disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Baixar o efetivo em planilha (.xlsx), com os filtros aplicados"
+            >
+              {exportando ? (
+                <span className="inline-block w-3.5 h-3.5 animate-spin rounded-full border-2 border-[#176B87] border-t-transparent" aria-hidden="true" />
+              ) : (
+                <Download className="w-3.5 h-3.5" />
+              )}
+              {exportando ? 'Gerando...' : 'Exportar'}
+            </button>
+          )}
 
           {/* Escolher quais colunas aparecem */}
           <div className="relative" ref={menuRef}>
@@ -275,7 +333,7 @@ export const AdminSubModuleView: React.FC<AdminSubModuleViewProps> = ({
             <p className="text-xs text-[#687582] mt-1">Contrate colaboradores na aba de Admissões.</p>
           </div>
         ) : (
-          <div className="overflow-auto max-h-[calc(100vh-290px)] min-h-[320px]">
+          <div className="rolagem-visivel overflow-auto max-h-[calc(100vh-290px)] min-h-[320px]">
             <table className="w-full text-left border-collapse text-xs">
               <thead className="sticky top-0 z-20">
                 <tr className="bg-[#F8FAFB] text-[11px] font-bold text-[#687582] uppercase tracking-wider shadow-[inset_0_-1px_0_#DDE3E8]">

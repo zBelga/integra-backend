@@ -38,6 +38,46 @@
   background: #B4C0CB;
 }
 
+/*
+ * Barra de rolagem sempre à vista.
+ *
+ * O Windows esconde a barra até o mouse passar por cima, e numa tabela larga
+ * ninguém adivinha que dá para arrastar para o lado. Aqui ela fica desenhada
+ * o tempo todo, nos dois sentidos, com contraste suficiente para ser notada.
+ */
+/*
+ * Atenção: NÃO declarar scrollbar-width/scrollbar-color fora do bloco do
+ * Firefox abaixo. A partir do Chrome 121, qualquer uma das duas faz o
+ * navegador usar a barra padrão do sistema e ignorar as regras
+ * ::-webkit-scrollbar — que é justamente o que deixava a barra invisível.
+ */
+.rolagem-visivel::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+.rolagem-visivel::-webkit-scrollbar-track {
+  background: #EDF1F4;
+  border-radius: 8px;
+}
+.rolagem-visivel::-webkit-scrollbar-thumb {
+  background: #9FB2C0;
+  border: 3px solid #EDF1F4;
+  border-radius: 8px;
+}
+.rolagem-visivel::-webkit-scrollbar-thumb:hover {
+  background: #70889B;
+}
+.rolagem-visivel::-webkit-scrollbar-corner {
+  background: #EDF1F4;
+}
+/* Firefox não tem ::-webkit-scrollbar; aqui as duas propriedades são o caminho. */
+@supports (-moz-appearance: none) {
+  .rolagem-visivel {
+    scrollbar-width: auto;
+    scrollbar-color: #9FB2C0 #EDF1F4;
+  }
+}
+
 /* ═══════════════════════════════════════════════════════════
    TELA DE LOGIN
    Escopo isolado em .login-integra — não afeta o resto do app.
