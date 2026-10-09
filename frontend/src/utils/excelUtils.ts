@@ -130,7 +130,7 @@ export async function exportAdmissoesToExcel(admissoes: Admissao[], filename = '
 export async function exportEfetivoToExcel(
   colaboradores: {
     numero_chapa?: string; nome?: string; funcao?: string; cpf?: string; rg?: string;
-    obra_nome?: string; data_admissao?: string; data_aso?: string;
+    obra_nome?: string; obra_codigo?: string; data_admissao?: string; data_aso?: string;
   }[],
   filename = 'Efetivo.xlsx'
 ) {
@@ -178,7 +178,7 @@ export async function exportEfetivoToExcel(
       funcao: c.funcao || '',
       cpf: applyCPFMask(c.cpf || ''),
       rg: c.rg || '',
-      obra: c.obra_nome || '',
+      obra: [c.obra_codigo, c.obra_nome].filter(Boolean).join(' — '),
       admissao: c.data_admissao ? formatDateBR(c.data_admissao) : '',
       venc1: somarDias(c.data_admissao, 44),
       venc2: somarDias(c.data_admissao, 89),

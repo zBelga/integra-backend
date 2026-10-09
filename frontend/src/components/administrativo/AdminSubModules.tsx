@@ -24,7 +24,7 @@ const TELA_EFETIVO = 'administrativo.efetivo';
  * Colunas que o usuário pode ligar/desligar no Efetivo.
  * Nome e o botão de editar ficam sempre visíveis.
  */
-type ColunaId = 'registro' | 'funcao' | 'admissao' | 'venc1' | 'venc2' | 'rg' | 'cpf' | 'aso' | 'asoVenc';
+type ColunaId = 'registro' | 'funcao' | 'admissao' | 'venc1' | 'venc2' | 'rg' | 'cpf' | 'aso' | 'asoVenc' | 'obra';
 
 const COLUNAS: { id: ColunaId; rotulo: string; curto: string }[] = [
   { id: 'registro', rotulo: 'Registro', curto: 'Registro' },
@@ -36,6 +36,7 @@ const COLUNAS: { id: ColunaId; rotulo: string; curto: string }[] = [
   { id: 'cpf', rotulo: 'CPF', curto: 'CPF' },
   { id: 'aso', rotulo: 'ASO', curto: 'ASO' },
   { id: 'asoVenc', rotulo: 'ASO Vencimento', curto: 'ASO Venc.' },
+  { id: 'obra', rotulo: 'Obra', curto: 'Obra' },
 ];
 
 const CHAVE_COLUNAS = 'si_efetivo_colunas';
@@ -333,12 +334,13 @@ export const AdminSubModuleView: React.FC<AdminSubModuleViewProps> = ({
             <p className="text-xs text-[#687582] mt-1">Contrate colaboradores na aba de Admissões.</p>
           </div>
         ) : (
-          <div className="rolagem-visivel overflow-auto max-h-[calc(100vh-290px)] min-h-[320px]">
+          // Altura: o que sobra da tela depois do cabeçalho da página e do rodapé.
+          // Quanto menor o desconto, mais linhas aparecem de uma vez.
+          <div className="rolagem-visivel overflow-auto max-h-[calc(100vh-215px)] min-h-[420px]">
             <table className="w-full text-left border-collapse text-xs">
               <thead className="sticky top-0 z-20">
                 <tr className="bg-[#F8FAFB] text-[11px] font-bold text-[#687582] uppercase tracking-wider shadow-[inset_0_-1px_0_#DDE3E8]">
                   <th className="py-3 px-2 text-center bg-[#F8FAFB]">#</th>
-                  <th className="py-3 px-1 text-center bg-[#F8FAFB]"></th>
                   {ver('registro') && <th className="py-3 px-2.5 text-center whitespace-nowrap bg-[#F8FAFB]">Registro</th>}
                   <th className="py-3 px-3 whitespace-nowrap bg-[#F8FAFB]">Nome</th>
                   {ver('funcao') && <th className="py-3 px-2.5 text-center whitespace-nowrap bg-[#F8FAFB]">Função</th>}
@@ -349,6 +351,9 @@ export const AdminSubModuleView: React.FC<AdminSubModuleViewProps> = ({
                   {ver('cpf') && <th className="py-3 px-2 text-center whitespace-nowrap bg-[#F8FAFB]">CPF</th>}
                   {ver('aso') && <th className="py-3 px-2 text-center whitespace-nowrap bg-[#F8FAFB]">ASO</th>}
                   {ver('asoVenc') && <th className="py-3 px-2 text-center whitespace-nowrap bg-[#F8FAFB]">ASO Venc.</th>}
+                  {ver('obra') && <th className="py-3 px-2.5 text-center whitespace-nowrap bg-[#F8FAFB]">Obra</th>}
+                  {/* Editar fica por último, depois dos dados */}
+                  <th className="py-3 px-2 text-center bg-[#F8FAFB]">Editar</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#DDE3E8] text-[#17212B]">
@@ -386,15 +391,6 @@ export const AdminSubModuleView: React.FC<AdminSubModuleViewProps> = ({
                   return (
                     <tr key={col.id} className="hover:bg-[#F8FAFB] transition-colors">
                       <td className="py-2.5 px-2 text-center text-[#8995A1] text-[11px] font-medium select-none">{index + 1}</td>
-                      <td className="py-2.5 px-1 text-center">
-                        <button
-                          onClick={() => setEditingCol(col)}
-                          className="p-1 text-[#687582] hover:text-[#176B87] hover:bg-[#E8F3F6] rounded-md transition-colors cursor-pointer"
-                          title="Editar"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                      </td>
                       {ver('registro') && (
                         <td className="py-2.5 px-2.5 text-center">
                           <span className="inline-block bg-[#E8F3F6] text-[#176B87] border border-[#C6E3EB] px-2 py-0.5 rounded-md font-bold text-[11px]">
@@ -453,6 +449,31 @@ export const AdminSubModuleView: React.FC<AdminSubModuleViewProps> = ({
                           {asoVenc ? dateBadge(asoVenc, true) : <span className="text-[#8995A1]">—</span>}
                         </td>
                       )}
+                      {ver('obra') && (
+                        <td className="py-2.5 px-2.5 text-center">
+                          {col.obra_nome || col.obra_codigo ? (
+                            <span
+                              className="inline-block max-w-[170px] truncate align-middle bg-[#EEF4FF] text-[#2B4C8C] border border-[#C9DAF5] px-2 py-0.5 rounded-md font-medium text-[11px] whitespace-nowrap"
+                              title={[col.obra_codigo, col.obra_nome].filter(Boolean).join(' — ')}
+                            >
+                              {col.obra_codigo ? `${col.obra_codigo} — ${col.obra_nome || ''}`.replace(/ — $/, '') : col.obra_nome}
+                            </span>
+                          ) : (
+                            <span className="text-[#8995A1]">—</span>
+                          )}
+                        </td>
+                      )}
+                      {/* Editar por último */}
+                      <td className="py-2.5 px-2 text-center">
+                        <button
+                          onClick={() => setEditingCol(col)}
+                          className="p-1 text-[#687582] hover:text-[#176B87] hover:bg-[#E8F3F6] rounded-md transition-colors cursor-pointer"
+                          title="Editar"
+                          aria-label={`Editar ${col.nome}`}
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}
