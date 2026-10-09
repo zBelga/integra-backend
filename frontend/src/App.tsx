@@ -33,6 +33,8 @@ const TiposDocumentoView = lazy(() =>
   import('./components/documentos/TiposDocumentoView').then(m => ({ default: m.TiposDocumentoView })));
 const DocumentosPorFuncaoView = lazy(() =>
   import('./components/documentos/DocumentosPorFuncaoView').then(m => ({ default: m.DocumentosPorFuncaoView })));
+const SegurancaView = lazy(() =>
+  import('./components/seguranca/SegurancaView').then(m => ({ default: m.SegurancaView })));
 
 /** Enquanto o arquivo da tela chega (normalmente alguns milissegundos). */
 const CarregandoTela: React.FC = () => (
@@ -69,6 +71,7 @@ const TELA_DA_VIEW: Partial<Record<ActiveView, string>> = {
   'documento-tipos': 'documentacao.tipos',
   'documentos-funcao': 'documentacao.porFuncao',
   solicitacoes: 'aprovacoes.solicitacoes',
+  seguranca: 'seguranca.epis',
   permissoes: 'master',
   usuarios: 'master',
 };
@@ -375,15 +378,17 @@ export default function App() {
           {currentView === 'administrativo' && (
             <AdministrativoView onShowToast={setToast} selectedEmpresa={selectedEmpresa} permissoes={permissoes} />
           )}
-          {(currentView === 'efetivo-obra' || currentView === 'seguranca' || currentView === 'almoxarifado') && (
+          {(currentView === 'efetivo-obra' || currentView === 'almoxarifado') && (
             <EmBreve
               titulo={
                 currentView === 'efetivo-obra' ? 'Efetivo por Obra'
-                : currentView === 'seguranca'  ? 'Segurança & EPIs'
                 : 'Almoxarifado & Materiais'
               }
               onVoltar={() => setCurrentView('dashboard')}
             />
+          )}
+          {currentView === 'seguranca' && (
+            <SegurancaView permissoes={permissoes} onVoltar={() => setCurrentView('dashboard')} />
           )}
           {currentView === 'efetivo' && (
             <div className="flex-1 overflow-y-auto p-6">

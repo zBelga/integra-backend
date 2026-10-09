@@ -439,3 +439,43 @@ export interface Documento {
   created_at?: string;
   updated_at?: string;
 }
+
+// ─── Segurança: ficha de EPI ─────────────────────────────────────────────────
+
+/** Um EPI do catálogo da empresa. */
+export interface EpiCatalogo {
+  id: string;
+  descricao: string;
+  ca: string;
+}
+
+/** Um item dentro do kit de um grupo. */
+export interface EpiItemKit {
+  id: string;
+  qtde: number;
+  ca: string;
+  descricao: string;
+}
+
+/** "Ajudante", "Eletricista"... e o que esse grupo recebe. */
+export interface EpiGrupo {
+  id: string;
+  nome: string;
+  ordem: number;
+  itens: EpiItemKit[];
+}
+
+/** Liga uma função do Efetivo a um grupo de EPI. */
+export interface EpiVinculoFuncao {
+  id: string;
+  funcao: string;
+  grupo_id: string;
+  /** Função sem acento e em maiúscula — serve para casar com o Efetivo. */
+  chave: string;
+}
+
+export interface EpiConfig {
+  grupos: EpiGrupo[];
+  mapa: EpiVinculoFuncao[];
+  catalogo: EpiCatalogo[];
+}

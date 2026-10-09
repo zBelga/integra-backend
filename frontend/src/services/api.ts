@@ -1077,3 +1077,60 @@ export async function salvarExigenciasFuncao(
   if (!res.ok) throw new Error(json.error || 'Erro ao salvar exigências');
   return json;
 }
+
+// ─────────────────────────────────────────────
+// SEGURANÇA — FICHA DE EPI
+// ─────────────────────────────────────────────
+
+/** Grupos + kits + mapa de funções + catálogo, numa só ida ao servidor. */
+export async function fetchEpiConfig(): Promise<{
+  success: boolean;
+  data: import('../types').EpiConfig;
+}> {
+  const res = await apiFetch('/api/epi/config');
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Erro ao carregar a configuração de EPI');
+  return json;
+}
+
+/** Substitui o kit do grupo pela lista enviada, na ordem recebida. */
+export async function salvarKitEpi(
+  grupoId: string,
+  itens: { qtde: number; ca: string; descricao: string }[]
+): Promise<{ success: boolean; message?: string }> {
+  const res = await apiFetch(`/api/epi/grupos/${grupoId}/kit`, {
+    method: 'PUT',
+    body: JSON.stringify({ itens }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Erro ao salvar o kit');
+  return json;
+}
+
+/** Vincula a função a um grupo. `grupo_id` vazio desvincula. */
+export async function vincularFuncaoEpi(
+  funcao: string,
+  grupo_id: string
+): Promise<{ success: boolean; message?: string }> {
+  const res = await apiFetch('/api/epi/mapa', {
+    method: 'PUT',
+    body: JSON.stringify({ funcao, grupo_id }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Erro ao vincular a função');
+  return json;
+}
+
+/** Novo EPI no catálogo da empresa. */
+export async function criarEpiCatalogo(
+  descricao: string,
+  ca: string
+): Promise<{ success: boolean; data: import('../types').EpiCatalogo }> {
+  const res = await apiFetch('/api/epi/catalogo', {
+    method: 'POST',
+    body: JSON.stringify({ descricao, ca }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Erro ao cadastrar o EPI');
+  return json;
+}

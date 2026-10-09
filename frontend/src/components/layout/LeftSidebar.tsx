@@ -16,6 +16,7 @@ import {
   Lock,
   Settings2,
   ListChecks,
+  FileText,
 } from 'lucide-react';
 import { ActiveView, ChaveModulo, Empresa, UsuarioSessao } from '../../types';
 import { podeNaTela } from '../../utils/permissoes';
@@ -93,7 +94,18 @@ const MODULOS: Record<ChaveModulo, { titulo: string; itens: ItemNav[] }> = {
       },
     ],
   },
-  seguranca:    { titulo: 'Segurança',    itens: [] },
+  seguranca: {
+    titulo: 'Segurança',
+    itens: [
+      {
+        view: 'seguranca',
+        label: 'Gerar Documentos',
+        icon: FileText,
+        titulo: 'Ficha de EPI e outros formulários',
+        tela: 'seguranca.epis',
+      },
+    ],
+  },
   almoxarifado: { titulo: 'Almoxarifado', itens: [] },
 };
 

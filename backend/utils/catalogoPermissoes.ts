@@ -136,9 +136,15 @@ export const CATALOGO: ModuloInfo[] = [
   {
     id: 'seguranca',
     nome: 'Segurança & EPIs',
-    descricao: 'Módulo em desenvolvimento',
-    emBreve: true,
-    telas: [{ id: 'epis', nome: 'Entrega de EPIs', descricao: 'Em desenvolvimento', extras: [] }],
+    descricao: 'Fichas e entrega de equipamento de proteção',
+    telas: [
+      {
+        id: 'epis',
+        nome: 'Ficha de EPI',
+        descricao: 'Gerar a ficha de entrega e manter os kits por função',
+        extras: [{ id: 'gerar', nome: 'Gerar documento', descricao: 'Baixar a ficha preenchida em PDF' }],
+      },
+    ],
   },
   {
     id: 'almoxarifado',

@@ -12,6 +12,7 @@ import empresasRouter   from './routes/empresas.js';
 import colaboradoresRouter from './routes/colaboradores.js';
 import documentosRouter from './routes/documentos.js';
 import documentoTiposRouter from './routes/documentoTipos.js';
+import epiRouter from './routes/epi.js';
 import { applySecurityHeaders, rateLimiter, handleServerError, corsMiddleware } from './utils/security.js';
 import { requireAuth } from './middleware/auth.js';
 import { getDb } from './db.js';
@@ -80,6 +81,7 @@ async function startServer() {
   app.use('/api/colaboradores', requireAuth, colaboradoresRouter);
   app.use('/api/documentos',      requireAuth, documentosRouter);
   app.use('/api/documento-tipos', requireAuth, documentoTiposRouter);
+  app.use('/api/epi',           requireAuth, epiRouter);
   app.use('/api/supabase',      requireAuth, supabaseRouter);
 
   // ── 404 para rotas de API desconhecidas ──

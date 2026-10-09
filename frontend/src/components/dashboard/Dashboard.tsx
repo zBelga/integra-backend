@@ -60,11 +60,12 @@ const MODULOS: ModuloCard[] = [
     chave: 'seguranca',
     view: 'seguranca',
     titulo: 'SEGURANÇA',
-    descricao: 'Gestão de EPIs, treinamentos e normas regulamentadoras.',
+    descricao: 'Gerar documentos de EPI e manter os kits de cada função.',
     icon: HardHat,
     cor: '#D97706', bg: '#FEF3C7', borda: '#FDE68A',
-    telas: [],
-    emBreve: true,
+    telas: [
+      { nome: 'Ficha de EPI', chave: 'seguranca.epis' },
+    ],
   },
   {
     chave: 'almoxarifado',
