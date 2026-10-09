@@ -452,11 +452,13 @@ export const AdminSubModuleView: React.FC<AdminSubModuleViewProps> = ({
                       {ver('obra') && (
                         <td className="py-2.5 px-2.5 text-center">
                           {col.obra_nome || col.obra_codigo ? (
+                            // Na tabela aparece só o código; o nome completo da
+                            // obra fica no título, ao passar o mouse.
                             <span
-                              className="inline-block max-w-[170px] truncate align-middle bg-[#EEF4FF] text-[#2B4C8C] border border-[#C9DAF5] px-2 py-0.5 rounded-md font-medium text-[11px] whitespace-nowrap"
+                              className="inline-block align-middle bg-[#EEF4FF] text-[#2B4C8C] border border-[#C9DAF5] px-2 py-0.5 rounded-md font-bold text-[11px] whitespace-nowrap"
                               title={[col.obra_codigo, col.obra_nome].filter(Boolean).join(' — ')}
                             >
-                              {col.obra_codigo ? `${col.obra_codigo} — ${col.obra_nome || ''}`.replace(/ — $/, '') : col.obra_nome}
+                              {col.obra_codigo || col.obra_nome}
                             </span>
                           ) : (
                             <span className="text-[#8995A1]">—</span>
