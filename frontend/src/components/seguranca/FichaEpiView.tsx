@@ -52,6 +52,8 @@ export const FichaEpiView: React.FC<Props> = ({ onVoltar, onAbrirKits, permissoe
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState('');
   const [feito, setFeito] = useState('');
+  /** A configuração de EPI não respondeu: a ficha segue, só sem os kits prontos. */
+  const [semKits, setSemKits] = useState(false);
 
   // Campos da ficha — preenchidos pelo Efetivo e seguem editáveis
   const [nome, setNome] = useState('');
@@ -69,23 +71,30 @@ export const FichaEpiView: React.FC<Props> = ({ onVoltar, onAbrirKits, permissoe
   const [escolhido, setEscolhido] = useState<Colaborador | null>(null);
   const campoNome = useRef<HTMLDivElement>(null);
 
+  /**
+   * As duas buscas são independentes de propósito.
+   *
+   * Antes elas iam juntas num Promise.all: quando a configuração de EPI
+   * falhava (as tabelas ainda não existiam no banco), a lista de nomes também
+   * sumia, e a tela ficava vazia sem explicar por quê. Agora cada uma cuida do
+   * seu erro — dá para preencher a ficha à mão mesmo sem os kits.
+   */
   useEffect(() => {
     let ativo = true;
-    (async () => {
-      try {
-        const [cfg, cols] = await Promise.all([
-          fetchEpiConfig(),
-          fetchColaboradores({ limit: 500 }),
-        ]);
-        if (!ativo) return;
-        if (cfg.success) setConfig(cfg.data);
-        setColaboradores(cols.data || []);
-      } catch (e: any) {
-        if (ativo) setErro(e.message || 'Não foi possível carregar os dados.');
-      } finally {
-        if (ativo) setCarregando(false);
-      }
-    })();
+
+    fetchColaboradores({ limit: 500, status: 'ativo' })
+      .then(res => { if (ativo) setColaboradores(res.data || []); })
+      .catch((e: any) => {
+        if (ativo) setErro(e.message || 'Não foi possível carregar o efetivo.');
+      })
+      .finally(() => { if (ativo) setCarregando(false); });
+
+    fetchEpiConfig()
+      .then(res => { if (ativo && res.success) setConfig(res.data); })
+      .catch(() => {
+        if (ativo) setSemKits(true);
+      });
+
     return () => { ativo = false; };
   }, []);
 
@@ -235,6 +244,17 @@ export const FichaEpiView: React.FC<Props> = ({ onVoltar, onAbrirKits, permissoe
       {feito && (
         <div className="flex items-start gap-2 p-3 rounded-lg bg-[#E7F6F0] border border-[#B5E4D3] text-[#0F6B4F] text-xs">
           <CheckCircle2 size={14} className="mt-0.5 shrink-0" /><span>{feito}</span>
+        </div>
+      )}
+
+      {semKits && (
+        <div className="flex items-start gap-2 p-3 rounded-lg bg-[#FFF6E0] border border-[#F5DFA6] text-[#8A6100] text-xs">
+          <AlertCircle size={14} className="mt-0.5 shrink-0" />
+          <span>
+            Os kits de EPI ainda não estão no banco, então nenhum item vem preenchido sozinho.
+            A ficha funciona do mesmo jeito — é só montar a lista de EPIs à mão. Para ligar os
+            kits por função, rode o <strong>criar-ficha-epi.sql</strong> no banco.
+          </span>
         </div>
       )}
 

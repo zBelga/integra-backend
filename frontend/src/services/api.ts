@@ -682,12 +682,15 @@ export async function deleteEmpresa(id: string): Promise<MutationResponse> {
 // ─── Colaboradores (Efetivo) ──────────────────────────────────────────────────
 export async function fetchColaboradores(params: {
   page?: number; limit?: number; search?: string; obra?: string;
+  /** 'ativo' (padrão no servidor), 'desligado' ou 'todos'. */
+  status?: 'ativo' | 'desligado' | 'todos';
 } = {}): Promise<{ data: import('../types').Colaborador[]; pagination: import('../types').PaginationMeta }> {
   const q = new URLSearchParams();
   if (params.page) q.set('page', String(params.page));
   if (params.limit) q.set('limit', String(params.limit));
   if (params.search) q.set('search', params.search);
   if (params.obra) q.set('obra', params.obra);
+  if (params.status) q.set('status', params.status);
   const res = await apiFetch(`/api/colaboradores?${q.toString()}`);
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || 'Erro ao listar colaboradores');
@@ -1132,5 +1135,31 @@ export async function criarEpiCatalogo(
   });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || 'Erro ao cadastrar o EPI');
+  return json;
+}
+
+/**
+ * Desliga o colaborador. Não apaga nada: ele sai do efetivo, vai para a aba
+ * "Desligados" e mantém documentos, histórico e fichas.
+ */
+export async function desligarColaborador(
+  id: string,
+  data_desligamento: string,
+  motivo = ''
+): Promise<{ success: boolean; message?: string }> {
+  const res = await apiFetch(`/api/colaboradores/${id}/desligar`, {
+    method: 'POST',
+    body: JSON.stringify({ data_desligamento, motivo }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Erro ao desligar o colaborador');
+  return json;
+}
+
+/** Desfaz o desligamento e devolve o colaborador ao efetivo. */
+export async function reativarColaborador(id: string): Promise<{ success: boolean; message?: string }> {
+  const res = await apiFetch(`/api/colaboradores/${id}/reativar`, { method: 'POST' });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Erro ao reativar o colaborador');
   return json;
 }

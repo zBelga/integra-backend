@@ -1,7 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { ArrowLeft, Users, Search, Edit2, FileText, Columns3, Check, Download } from 'lucide-react';
+import {
+  ArrowLeft, Users, Search, Edit2, FileText, Columns3, Check, Download,
+  UserMinus, RotateCcw, X, AlertCircle, CheckCircle2,
+} from 'lucide-react';
 import { EditColaboradorModal } from './EditColaboradorModal';
-import { updateColaborador, fetchColaboradores, fetchObras } from '../../services/api';
+import {
+  updateColaborador, fetchColaboradores, fetchObras,
+  desligarColaborador, reativarColaborador,
+} from '../../services/api';
 import { Colaborador, PermissoesUsuario } from '../../types';
 import { applyCPFMask, formatDateBR } from '../../utils/cpfMask';
 import { useDebounce } from '../../utils/debounce';
@@ -64,6 +70,12 @@ function addDays(dateStr: string, days: number): string {
   return d.toISOString().split('T')[0];
 }
 
+function hojeIso(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
 export const AdminSubModuleView: React.FC<AdminSubModuleViewProps> = ({
   section,
   obras: obrasRecebidas,
@@ -93,6 +105,20 @@ export const AdminSubModuleView: React.FC<AdminSubModuleViewProps> = ({
    */
   const buscaAplicada = useDebounce(search, 350);
   const [editingCol, setEditingCol] = useState<Colaborador | null>(null);
+  /**
+   * Aba da tela: quem está no efetivo x quem já saiu.
+   *
+   * Desligar não apaga ninguém — o registro continua inteiro, com documentos
+   * e histórico. Só muda de lado, e dá para voltar atrás.
+   */
+  const [aba, setAba] = useState<'ativo' | 'desligado'>('ativo');
+  const podeDesligar = !permissoes || podeExtra(permissoes, TELA_EFETIVO, 'desligar');
+  const [desligando, setDesligando] = useState<Colaborador | null>(null);
+  const [dataDesligamento, setDataDesligamento] = useState(hojeIso);
+  const [motivoDesligamento, setMotivoDesligamento] = useState('');
+  const [salvandoDesligamento, setSalvandoDesligamento] = useState(false);
+  const [aviso, setAviso] = useState('');
+  const [erro, setErro] = useState('');
   const [colunas, setColunas] = useState<Record<ColunaId, boolean>>(lerColunasSalvas);
   const [menuColunas, setMenuColunas] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -135,7 +161,7 @@ export const AdminSubModuleView: React.FC<AdminSubModuleViewProps> = ({
   const loadColaboradores = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await fetchColaboradores({ search: buscaAplicada, limit: 500 });
+      const res = await fetchColaboradores({ search: buscaAplicada, limit: 500, status: aba });
       setColaboradores(res.data);
       setTotal(res.pagination.total);
     } catch {
@@ -143,12 +169,46 @@ export const AdminSubModuleView: React.FC<AdminSubModuleViewProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [buscaAplicada]);
+  }, [buscaAplicada, aba]);
 
   const handleSaveCol = async (id: string, data: Partial<Colaborador>) => {
     await updateColaborador(id, data);
     setEditingCol(null);
     await loadColaboradores();
+  };
+
+  const abrirDesligamento = (col: Colaborador) => {
+    setErro(''); setAviso('');
+    setDataDesligamento(hojeIso());
+    setMotivoDesligamento('');
+    setDesligando(col);
+  };
+
+  const confirmarDesligamento = async () => {
+    if (!desligando) return;
+    setErro('');
+    setSalvandoDesligamento(true);
+    try {
+      const res = await desligarColaborador(desligando.id, dataDesligamento, motivoDesligamento);
+      setDesligando(null);
+      setAviso(res.message || 'Colaborador desligado.');
+      await loadColaboradores();
+    } catch (e: any) {
+      setErro(e.message || 'Não foi possível desligar o colaborador.');
+    } finally {
+      setSalvandoDesligamento(false);
+    }
+  };
+
+  const reativar = async (col: Colaborador) => {
+    setErro(''); setAviso('');
+    try {
+      const res = await reativarColaborador(col.id);
+      setAviso(res.message || 'Colaborador reativado.');
+      await loadColaboradores();
+    } catch (e: any) {
+      setErro(e.message || 'Não foi possível reativar o colaborador.');
+    }
   };
 
   /** Leva para a planilha exatamente o que está na tela, na mesma ordem. */
@@ -178,40 +238,6 @@ export const AdminSubModuleView: React.FC<AdminSubModuleViewProps> = ({
     return () => { ativo = false; };
   }, [section, obrasRecebidas]);
 
-  if (section === 'desligados') {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center gap-3">
-          <button onClick={onBackToAdmissao} className="flex items-center gap-1.5 text-xs text-[#687582] hover:text-[#17212B] transition-colors cursor-pointer font-medium">
-            <ArrowLeft className="w-4 h-4" /> Voltar
-          </button>
-          <h2 className="text-lg font-bold text-[#17212B]">Desligados</h2>
-        </div>
-        <div className="bg-white rounded-xl border border-[#DDE3E8] p-12 text-center">
-          <Users className="w-12 h-12 text-[#8995A1] mx-auto mb-3" />
-          <p className="text-sm font-semibold text-[#17212B]">Nenhum desligamento registrado</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (section === 'ferias') {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center gap-3">
-          <button onClick={onBackToAdmissao} className="flex items-center gap-1.5 text-xs text-[#687582] hover:text-[#17212B] transition-colors cursor-pointer font-medium">
-            <ArrowLeft className="w-4 h-4" /> Voltar
-          </button>
-          <h2 className="text-lg font-bold text-[#17212B]">Férias</h2>
-        </div>
-        <div className="bg-white rounded-xl border border-[#DDE3E8] p-12 text-center">
-          <Users className="w-12 h-12 text-[#8995A1] mx-auto mb-3" />
-          <p className="text-sm font-semibold text-[#17212B]">Nenhuma férias programada</p>
-        </div>
-      </div>
-    );
-  }
-
   // Efetivo
   return (
     <div className="space-y-4">
@@ -223,7 +249,32 @@ export const AdminSubModuleView: React.FC<AdminSubModuleViewProps> = ({
           </button>
           <div>
             <h2 className="text-lg font-bold text-[#17212B]">Efetivo</h2>
-            <p className="text-xs text-[#687582]">{total} colaborador{total !== 1 ? 'es' : ''} ativo{total !== 1 ? 's' : ''}</p>
+            <p className="text-xs text-[#687582]">
+              {total} {aba === 'ativo'
+                ? `colaborador${total !== 1 ? 'es' : ''} ativo${total !== 1 ? 's' : ''}`
+                : `desligamento${total !== 1 ? 's' : ''} registrado${total !== 1 ? 's' : ''}`}
+            </p>
+          </div>
+
+          {/* Ativos x Desligados — mesma tela, dois lados */}
+          <div className="flex items-center gap-1 p-0.5 bg-[#F4F6F8] border border-[#DDE3E8] rounded-lg ml-2">
+            {([
+              { id: 'ativo' as const, rotulo: 'Efetivo' },
+              { id: 'desligado' as const, rotulo: 'Desligados' },
+            ]).map(t => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => { setAba(t.id); setAviso(''); setErro(''); }}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
+                  aba === t.id
+                    ? 'bg-white text-[#176B87] shadow-sm border border-[#DDE3E8]'
+                    : 'text-[#687582] hover:text-[#17212B]'
+                }`}
+              >
+                {t.rotulo}
+              </button>
+            ))}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -313,6 +364,17 @@ export const AdminSubModuleView: React.FC<AdminSubModuleViewProps> = ({
         </div>
       </div>
 
+      {erro && (
+        <div className="flex items-start gap-2 p-3 rounded-lg bg-[#FDEBEC] border border-[#F5C6CA] text-[#9B2C33] text-xs">
+          <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" /><span>{erro}</span>
+        </div>
+      )}
+      {aviso && (
+        <div className="flex items-start gap-2 p-3 rounded-lg bg-[#E7F6F0] border border-[#B5E4D3] text-[#0F6B4F] text-xs">
+          <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 shrink-0" /><span>{aviso}</span>
+        </div>
+      )}
+
       {onOpenPerfil && (
         <p className="text-xs text-[#687582] flex items-center gap-1">
           <FileText className="w-3.5 h-3.5" />
@@ -330,8 +392,14 @@ export const AdminSubModuleView: React.FC<AdminSubModuleViewProps> = ({
         ) : colaboradores.length === 0 ? (
           <div className="p-12 text-center">
             <Users className="w-12 h-12 text-[#8995A1] mx-auto mb-3" />
-            <h3 className="text-sm font-semibold text-[#17212B]">Nenhum colaborador no efetivo</h3>
-            <p className="text-xs text-[#687582] mt-1">Contrate colaboradores na aba de Admissões.</p>
+            <h3 className="text-sm font-semibold text-[#17212B]">
+              {aba === 'ativo' ? 'Nenhum colaborador no efetivo' : 'Nenhum desligamento registrado'}
+            </h3>
+            <p className="text-xs text-[#687582] mt-1">
+              {aba === 'ativo'
+                ? 'Contrate colaboradores na aba de Admissões.'
+                : 'Quem for desligado no Efetivo aparece aqui, com os documentos preservados.'}
+            </p>
           </div>
         ) : (
           // Altura: o que sobra da tela depois do cabeçalho da página e do rodapé.
@@ -352,8 +420,16 @@ export const AdminSubModuleView: React.FC<AdminSubModuleViewProps> = ({
                   {ver('aso') && <th className="py-3 px-2 text-center whitespace-nowrap bg-[#F8FAFB]">ASO</th>}
                   {ver('asoVenc') && <th className="py-3 px-2 text-center whitespace-nowrap bg-[#F8FAFB]">ASO Venc.</th>}
                   {ver('obra') && <th className="py-3 px-2.5 text-center whitespace-nowrap bg-[#F8FAFB]">Obra</th>}
-                  {/* Editar fica por último, depois dos dados */}
-                  <th className="py-3 px-2 text-center bg-[#F8FAFB]">Editar</th>
+                  {aba === 'desligado' && (
+                    <>
+                      <th className="py-3 px-2 text-center whitespace-nowrap bg-[#F8FAFB]">Desligado em</th>
+                      <th className="py-3 px-2.5 whitespace-nowrap bg-[#F8FAFB]">Motivo</th>
+                    </>
+                  )}
+                  {/* Ações ficam por último, depois dos dados */}
+                  <th className="py-3 px-2 text-center bg-[#F8FAFB]">
+                    {aba === 'ativo' ? 'Ações' : 'Reativar'}
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#DDE3E8] text-[#17212B]">
@@ -465,16 +541,54 @@ export const AdminSubModuleView: React.FC<AdminSubModuleViewProps> = ({
                           )}
                         </td>
                       )}
-                      {/* Editar por último */}
-                      <td className="py-2.5 px-2 text-center">
-                        <button
-                          onClick={() => setEditingCol(col)}
-                          className="p-1 text-[#687582] hover:text-[#176B87] hover:bg-[#E8F3F6] rounded-md transition-colors cursor-pointer"
-                          title="Editar"
-                          aria-label={`Editar ${col.nome}`}
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
+                      {aba === 'desligado' && (
+                        <>
+                          <td className="py-2.5 px-2 text-center">
+                            {col.desligado_em ? (
+                              <span className="inline-block px-1.5 py-0.5 rounded-md border font-semibold whitespace-nowrap text-[#9B2C33] bg-[#FDEBEC] border-[#F5B8BB]">
+                                {formatDateBR(col.desligado_em)}
+                              </span>
+                            ) : <span className="text-[#8995A1]">—</span>}
+                          </td>
+                          <td className="py-2.5 px-2.5 max-w-[220px]">
+                            <span className="block truncate text-[#687582]" title={col.motivo_desligamento || ''}>
+                              {col.motivo_desligamento || '—'}
+                            </span>
+                          </td>
+                        </>
+                      )}
+                      {/* Ações por último */}
+                      <td className="py-2.5 px-2 text-center whitespace-nowrap">
+                        {aba === 'ativo' ? (
+                          <>
+                            <button
+                              onClick={() => setEditingCol(col)}
+                              className="p-1 text-[#687582] hover:text-[#176B87] hover:bg-[#E8F3F6] rounded-md transition-colors cursor-pointer"
+                              title="Editar"
+                              aria-label={`Editar ${col.nome}`}
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            {podeDesligar && (
+                              <button
+                                onClick={() => abrirDesligamento(col)}
+                                className="ml-1 p-1 text-[#687582] hover:text-[#D64550] hover:bg-[#FDEBEC] rounded-md transition-colors cursor-pointer"
+                                title="Desligar colaborador"
+                                aria-label={`Desligar ${col.nome}`}
+                              >
+                                <UserMinus className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </>
+                        ) : podeDesligar ? (
+                          <button
+                            onClick={() => reativar(col)}
+                            className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-[#176B87] border border-[#B8D4DD] bg-[#E8F3F6] hover:bg-[#d8ebf0] rounded-md transition-colors cursor-pointer"
+                            title="Devolver ao efetivo"
+                          >
+                            <RotateCcw className="w-3 h-3" /> Reativar
+                          </button>
+                        ) : <span className="text-[#8995A1]">—</span>}
                       </td>
                     </tr>
                   );
@@ -484,6 +598,76 @@ export const AdminSubModuleView: React.FC<AdminSubModuleViewProps> = ({
           </div>
         )}
       </div>
+      {/* Confirmação do desligamento */}
+      {desligando && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-xl border border-[#DDE3E8] shadow-xl w-full max-w-md">
+            <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-[#EDF1F4]">
+              <div className="flex items-start gap-2.5">
+                <span className="w-9 h-9 rounded-xl bg-[#FDEBEC] border border-[#F5C6CA] flex items-center justify-center shrink-0">
+                  <UserMinus className="w-4 h-4 text-[#D64550]" />
+                </span>
+                <div>
+                  <h3 className="text-sm font-bold text-[#17212B]">Desligar colaborador</h3>
+                  <p className="text-xs text-[#687582] mt-0.5">{desligando.nome}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setDesligando(null)}
+                className="p-1 rounded-md text-[#687582] hover:bg-[#F4F6F8] cursor-pointer"
+                aria-label="Fechar"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="px-5 py-4 space-y-3">
+              <p className="text-xs text-[#687582] leading-relaxed bg-[#F8FAFB] border border-[#EDF1F4] rounded-lg p-2.5">
+                Nada é apagado. Ele sai do Efetivo, vai para a aba <strong>Desligados</strong> e
+                mantém documentos, histórico e fichas. Dá para reativar depois.
+              </p>
+              <label className="block">
+                <span className="text-[11px] font-semibold text-[#687582]">Data do desligamento</span>
+                <input
+                  type="date"
+                  value={dataDesligamento}
+                  onChange={e => setDataDesligamento(e.target.value)}
+                  className="mt-1 w-full px-3 py-2 text-xs border border-[#DDE3E8] rounded-lg outline-none focus:border-[#176B87]"
+                />
+              </label>
+              <label className="block">
+                <span className="text-[11px] font-semibold text-[#687582]">Motivo (opcional)</span>
+                <input
+                  value={motivoDesligamento}
+                  onChange={e => setMotivoDesligamento(e.target.value)}
+                  placeholder="Pedido de demissão, fim de contrato, justa causa..."
+                  className="mt-1 w-full px-3 py-2 text-xs border border-[#DDE3E8] rounded-lg outline-none focus:border-[#176B87]"
+                />
+              </label>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[#EDF1F4]">
+              <button
+                onClick={() => setDesligando(null)}
+                className="px-3 py-2 text-xs font-semibold text-[#687582] border border-[#DDE3E8] rounded-lg hover:bg-[#F4F6F8] transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmarDesligamento}
+                disabled={salvandoDesligamento || !dataDesligamento}
+                className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-white bg-[#D64550] hover:bg-[#bd3b45] disabled:opacity-60 rounded-lg transition-colors cursor-pointer"
+              >
+                {salvandoDesligamento && (
+                  <span className="inline-block w-3.5 h-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                )}
+                Confirmar desligamento
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {editingCol && (
         <EditColaboradorModal
           colaborador={editingCol}

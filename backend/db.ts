@@ -191,6 +191,9 @@ async function getDbSqlite(): Promise<Database> {
         data_admissao TEXT NOT NULL,
         data_aso TEXT DEFAULT '',
         contratado_em TEXT DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'ativo',
+        desligado_em TEXT DEFAULT '',
+        motivo_desligamento TEXT DEFAULT '',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
@@ -253,6 +256,18 @@ async function getDbSqlite(): Promise<Database> {
   // Dia em que o colaborador foi marcado como contratado (abas de contratados)
   try {
     db.run("ALTER TABLE colaboradores ADD COLUMN contratado_em TEXT DEFAULT ''");
+  } catch {}
+
+  // Desligamento: o colaborador nunca é apagado, só muda de status.
+  // Assim os documentos, o histórico e as fichas dele continuam de pé.
+  try {
+    db.run("ALTER TABLE colaboradores ADD COLUMN status TEXT NOT NULL DEFAULT 'ativo'");
+  } catch {}
+  try {
+    db.run("ALTER TABLE colaboradores ADD COLUMN desligado_em TEXT DEFAULT ''");
+  } catch {}
+  try {
+    db.run("ALTER TABLE colaboradores ADD COLUMN motivo_desligamento TEXT DEFAULT ''");
   } catch {}
 
   // Check if initial seed for empresas is needed

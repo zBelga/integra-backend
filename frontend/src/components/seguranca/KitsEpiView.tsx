@@ -54,11 +54,17 @@ export const KitsEpiView: React.FC<Props> = ({ onVoltar, permissoes }) => {
     setCarregando(true);
     setErro('');
     try {
-      const [cfg, cols] = await Promise.all([
+      // allSettled: sem os kits a tela ainda mostra as funções do efetivo
+      const [rCfg, rCols] = await Promise.allSettled([
         fetchEpiConfig(),
-        fetchColaboradores({ limit: 500 }),
+        fetchColaboradores({ limit: 500, status: 'ativo' }),
       ]);
-      if (cfg.success) {
+      if (rCfg.status === 'rejected') {
+        setErro('Os kits de EPI ainda não estão no banco. Rode o criar-ficha-epi.sql para liberar esta tela.');
+      }
+      const cfg = rCfg.status === 'fulfilled' ? rCfg.value : null;
+      const cols = rCols.status === 'fulfilled' ? rCols.value : { data: [] as any[] };
+      if (cfg?.success) {
         setConfig(cfg.data);
         setGrupoAtivo(atual => atual || cfg.data.grupos[0]?.id || '');
       }

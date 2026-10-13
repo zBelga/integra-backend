@@ -299,6 +299,11 @@ export interface Colaborador {
   data_aso?: string;
   /** Dia em que a admissão foi marcada como contratada (AAAA-MM-DD) */
   contratado_em?: string;
+  /** 'ativo' (no efetivo) ou 'desligado'. Ausente conta como 'ativo'. */
+  status?: 'ativo' | 'desligado';
+  /** Data do desligamento (AAAA-MM-DD) */
+  desligado_em?: string;
+  motivo_desligamento?: string;
   created_at?: string;
   updated_at?: string;
 }
