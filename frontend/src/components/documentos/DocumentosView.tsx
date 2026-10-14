@@ -3,6 +3,7 @@ import {
   FolderOpen,
   Search,
   User,
+  UserMinus,
   FileText,
   AlertCircle,
   Clock,
@@ -54,6 +55,7 @@ interface DocumentosViewProps {
 }
 
 export const DocumentosView: React.FC<DocumentosViewProps> = ({ selectedEmpresaId, onConfigurarExigencias }) => {
+  const [aba, setAba] = useState<'ativo' | 'desligado'>('ativo');
   const [lista, setLista] = useState<ColaboradorComDocs[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -65,9 +67,7 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({ selectedEmpresaI
   const loadDados = useCallback(async () => {
     setIsLoading(true);
     try {
-      // TODO o efetivo entra na lista — mesmo quem não tem nenhum documento
-      // anexado e mesmo quem está sem obra vinculada.
-      const res = await fetchColaboradores({ search: '', limit: 500 });
+      const res = await fetchColaboradores({ search: '', limit: 500, status: aba });
       const colaboradores: Colaborador[] = res.data || [];
 
       // Uma única requisição traz o resumo de todos (antes era uma por pessoa)
@@ -125,9 +125,17 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({ selectedEmpresaI
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [aba]);
 
   useEffect(() => { loadDados(); }, [loadDados]);
+
+  // Resetar filtro ao trocar de aba
+  const trocarAba = (novaAba: 'ativo' | 'desligado') => {
+    if (novaAba === aba) return;
+    setAba(novaAba);
+    setFiltro('todos');
+    setSearch('');
+  };
 
   // ─── Estatísticas ───
   const stats = useMemo(() => ({
@@ -225,7 +233,9 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({ selectedEmpresaI
             <h1 className="text-lg font-bold text-[#17212B]">Documentos</h1>
           </div>
           <p className="text-xs text-[#687582] mt-0.5">
-            Controle de documentos, vencimentos e pendências de cada colaborador do efetivo
+            {aba === 'ativo'
+              ? 'Controle de documentos, vencimentos e pendências de cada colaborador do efetivo'
+              : 'Documentos de colaboradores desligados'}
           </p>
         </div>
 
@@ -245,6 +255,30 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({ selectedEmpresaI
             <Download className="w-3.5 h-3.5" /> Exportar CSV
           </button>
         </div>
+      </div>
+
+      {/* Abas Efetivo / Desligados */}
+      <div className="flex gap-1">
+        <button
+          onClick={() => trocarAba('ativo')}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
+            aba === 'ativo'
+              ? 'bg-[#176B87] text-white border-[#176B87]'
+              : 'bg-white text-[#687582] border-[#DDE3E8] hover:border-[#176B87] hover:text-[#176B87]'
+          }`}
+        >
+          <User className="w-3.5 h-3.5" /> Efetivo
+        </button>
+        <button
+          onClick={() => trocarAba('desligado')}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
+            aba === 'desligado'
+              ? 'bg-[#D64550] text-white border-[#D64550]'
+              : 'bg-white text-[#687582] border-[#DDE3E8] hover:border-[#D64550] hover:text-[#D64550]'
+          }`}
+        >
+          <UserMinus className="w-3.5 h-3.5" /> Desligados
+        </button>
       </div>
 
       {/* Cards de resumo — clicáveis como filtro */}
@@ -308,8 +342,8 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({ selectedEmpresaI
         </button>
       </div>
 
-      {/* Painel de alertas de vencimento */}
-      {showAlertas && alertas.length > 0 && (
+      {/* Painel de alertas de vencimento (só na aba ativo) */}
+      {aba === 'ativo' && showAlertas && alertas.length > 0 && (
         <div className="bg-white border border-[#F8D99B] rounded-xl overflow-hidden">
           <div className="flex items-center justify-between px-4 py-2.5 bg-[#FEF3E0] border-b border-[#F8D99B]">
             <div className="flex items-center gap-2">
@@ -400,7 +434,9 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({ selectedEmpresaI
             <h3 className="text-sm font-semibold text-[#17212B]">Nenhum colaborador encontrado</h3>
             <p className="text-xs text-[#687582] mt-1">
               {lista.length === 0
-                ? 'Adicione colaboradores ao efetivo primeiro.'
+                ? aba === 'desligado'
+                  ? 'Nenhum colaborador desligado no momento.'
+                  : 'Adicione colaboradores ao efetivo primeiro.'
                 : 'Tente ajustar o filtro ou a busca.'}
             </p>
           </div>
@@ -408,13 +444,22 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({ selectedEmpresaI
           <div className="overflow-x-auto">
             <div className="min-w-[860px]">
               {/* Cabeçalho */}
-              <div className="bg-[#F8FAFB] px-5 py-2.5 grid grid-cols-12 gap-3 text-[10px] font-bold text-[#687582] uppercase tracking-wider border-b border-[#DDE3E8]">
+              <div className={`bg-[#F8FAFB] px-5 py-2.5 grid gap-3 text-[10px] font-bold text-[#687582] uppercase tracking-wider border-b border-[#DDE3E8] ${aba === 'desligado' ? 'grid-cols-12' : 'grid-cols-12'}`}>
                 <div className="col-span-1 text-center">#</div>
-                <div className="col-span-3">Colaborador</div>
+                <div className={aba === 'desligado' ? 'col-span-3' : 'col-span-3'}>Colaborador</div>
                 <div className="col-span-2">Função / Obra</div>
-                <div className="col-span-2 text-center">Documentos</div>
-                <div className="col-span-3 text-center">Pendências Obrigatórias</div>
-                <div className="col-span-1 text-center">Status</div>
+                <div className={aba === 'desligado' ? 'col-span-2 text-center' : 'col-span-2 text-center'}>Documentos</div>
+                {aba === 'desligado' ? (
+                  <>
+                    <div className="col-span-2 text-center">Desligado em</div>
+                    <div className="col-span-1 text-center">Status</div>
+                  </>
+                ) : (
+                  <>
+                    <div className="col-span-3 text-center">Pendências Obrigatórias</div>
+                    <div className="col-span-1 text-center">Status</div>
+                  </>
+                )}
               </div>
 
               <div className="divide-y divide-[#DDE3E8]">
@@ -478,43 +523,66 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({ selectedEmpresaI
                         )}
                       </div>
 
-                      {/* Pendências */}
-                      <div className="col-span-3 text-center">
-                        {carregando ? (
-                          <span className="text-[#8995A1] text-[11px]">—</span>
-                        ) : pendentes.length === 0 ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#159A72]">
-                            <CheckCircle className="w-3 h-3" /> Completo
-                          </span>
-                        ) : (
-                          <div className="flex items-center justify-center gap-1 flex-wrap">
-                            {pendentes.slice(0, 3).map(p => (
-                              <span key={p} className="px-1.5 py-0.5 bg-[#EDE9FE] text-[#7C3AED] border border-[#DDD6FE] rounded text-[9px] font-bold">
-                                {p}
-                              </span>
-                            ))}
-                            {pendentes.length > 3 && (
-                              <span className="text-[9px] text-[#7C3AED] font-bold">+{pendentes.length - 3}</span>
+                      {aba === 'desligado' ? (
+                        <>
+                          {/* Desligado em */}
+                          <div className="col-span-2 text-center">
+                            <div className="text-[11px] text-[#687582]">
+                              {col.desligado_em ? formatDateBR(col.desligado_em) : '—'}
+                            </div>
+                            {col.motivo_desligamento && (
+                              <div className="text-[10px] text-[#8995A1] truncate" title={col.motivo_desligamento}>
+                                {col.motivo_desligamento}
+                              </div>
                             )}
                           </div>
-                        )}
-                      </div>
+                          {/* Status */}
+                          <div className="col-span-1 flex items-center justify-center gap-1">
+                            <UserMinus className="w-4 h-4 text-[#D64550]" title="Desligado" />
+                            <ChevronRight className="w-3.5 h-3.5 text-[#8995A1] group-hover:text-[#176B87] transition-colors" />
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          {/* Pendências */}
+                          <div className="col-span-3 text-center">
+                            {carregando ? (
+                              <span className="text-[#8995A1] text-[11px]">—</span>
+                            ) : pendentes.length === 0 ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#159A72]">
+                                <CheckCircle className="w-3 h-3" /> Completo
+                              </span>
+                            ) : (
+                              <div className="flex items-center justify-center gap-1 flex-wrap">
+                                {pendentes.slice(0, 3).map(p => (
+                                  <span key={p} className="px-1.5 py-0.5 bg-[#EDE9FE] text-[#7C3AED] border border-[#DDD6FE] rounded text-[9px] font-bold">
+                                    {p}
+                                  </span>
+                                ))}
+                                {pendentes.length > 3 && (
+                                  <span className="text-[9px] text-[#7C3AED] font-bold">+{pendentes.length - 3}</span>
+                                )}
+                              </div>
+                            )}
+                          </div>
 
-                      {/* Status */}
-                      <div className="col-span-1 flex items-center justify-center gap-1">
-                        {carregando ? null : vencidos > 0 ? (
-                          <AlertCircle className="w-4 h-4 text-[#D64550]" title="Documentos vencidos" />
-                        ) : pendentes.length > 0 ? (
-                          <AlertTriangle className="w-4 h-4 text-[#7C3AED]" title="Pendências obrigatórias" />
-                        ) : aVencer > 0 ? (
-                          <Clock className="w-4 h-4 text-[#D4890A]" title="Documentos a vencer" />
-                        ) : totalDocs > 0 ? (
-                          <CheckCircle className="w-4 h-4 text-[#159A72]" title="Regular" />
-                        ) : (
-                          <span className="text-[#8995A1] text-[11px]">—</span>
-                        )}
-                        <ChevronRight className="w-3.5 h-3.5 text-[#8995A1] group-hover:text-[#176B87] transition-colors" />
-                      </div>
+                          {/* Status */}
+                          <div className="col-span-1 flex items-center justify-center gap-1">
+                            {carregando ? null : vencidos > 0 ? (
+                              <AlertCircle className="w-4 h-4 text-[#D64550]" title="Documentos vencidos" />
+                            ) : pendentes.length > 0 ? (
+                              <AlertTriangle className="w-4 h-4 text-[#7C3AED]" title="Pendências obrigatórias" />
+                            ) : aVencer > 0 ? (
+                              <Clock className="w-4 h-4 text-[#D4890A]" title="Documentos a vencer" />
+                            ) : totalDocs > 0 ? (
+                              <CheckCircle className="w-4 h-4 text-[#159A72]" title="Regular" />
+                            ) : (
+                              <span className="text-[#8995A1] text-[11px]">—</span>
+                            )}
+                            <ChevronRight className="w-3.5 h-3.5 text-[#8995A1] group-hover:text-[#176B87] transition-colors" />
+                          </div>
+                        </>
+                      )}
                     </button>
                   );
                 })}
