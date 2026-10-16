@@ -74,12 +74,13 @@ router.get('/', exigirAlgumaTela(['administrativo.efetivo', 'administrativo.efet
     const countRes = await queryRows(`SELECT COUNT(*) as total FROM colaboradores c ${whereSQL}`, params);
     const total = countRes[0]?.total || 0;
 
-    // Ordem da lista. O padrão é alfabético — é assim que se procura alguém
-    // numa lista de pessoas. `?ordenar=recentes` devolve os mais novos
-    // primeiro, para quem precisar do comportamento antigo.
+    // Ordem da lista. Desligados: últimos demitidos primeiro (desligado_em DESC).
+    // Ativos: alfabético por nome. `?ordenar=recentes` força created_at DESC.
     const ordem = String(req.query.ordenar || '') === 'recentes'
       ? 'c.created_at DESC'
-      : 'c.nome ASC';
+      : statusPedido === 'desligado'
+        ? 'c.desligado_em DESC NULLS LAST'
+        : 'c.nome ASC';
 
     const rows = await queryRows(`
       SELECT c.*, o.nome as obra_nome, o.codigo as obra_codigo

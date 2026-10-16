@@ -47,6 +47,7 @@ const VAZIO: DocumentoTipoFormData = {
   dias_alerta: 30,
   status: 'ativo',
   todos_colaboradores: false,
+  aplicavel_a: 'todos',
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -74,6 +75,7 @@ function TipoModal({
           dias_alerta: tipo.dias_alerta,
           status: tipo.status,
           todos_colaboradores: !!tipo.todos_colaboradores,
+          aplicavel_a: tipo.aplicavel_a || 'todos',
         }
       : VAZIO
   );
@@ -187,6 +189,35 @@ function TipoModal({
           </label>
 
           <div className="rounded-xl border border-[#E4E9ED] bg-[#F8FAFB] p-3.5 space-y-3">
+            <div>
+              <span className="block text-xs font-semibold text-[#17212B] mb-1.5">Aplicável a</span>
+              <div className="flex gap-2">
+                {([
+                  { value: 'todos', label: 'Todos', desc: 'Ativos e desligados' },
+                  { value: 'ativo', label: 'Apenas ativos', desc: 'Só colaboradores em atividade' },
+                  { value: 'desligado', label: 'Apenas desligados', desc: 'Ex.: ASO Demissional' },
+                ] as const).map(opt => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => set('aplicavel_a', opt.value)}
+                    title={opt.desc}
+                    className={`flex-1 py-2 text-xs font-semibold rounded-lg border transition-colors cursor-pointer ${
+                      form.aplicavel_a === opt.value
+                        ? opt.value === 'desligado'
+                          ? 'bg-[#FEF3E7] border-[#F5C78E] text-[#B45309]'
+                          : opt.value === 'ativo'
+                            ? 'bg-[#E8F6F1] border-[#B8E8D9] text-[#0F7A5A]'
+                            : 'bg-[#EEF4F7] border-[#B6D4E0] text-[#176B87]'
+                        : 'bg-white border-[#DDE3E8] text-[#8995A1] hover:border-[#B6C2CC]'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <label className="flex items-center gap-2.5 cursor-pointer select-none w-fit">
               <input
                 type="checkbox"
@@ -654,6 +685,16 @@ export const TiposDocumentoView: React.FC = () => {
                         {t.todos_colaboradores && (
                           <span className="px-1.5 py-0.5 bg-[#F1ECFE] text-[#6D28D9] border border-[#E1D9FB] rounded text-[9px] font-bold">
                             TODOS
+                          </span>
+                        )}
+                        {t.aplicavel_a === 'desligado' && (
+                          <span className="px-1.5 py-0.5 bg-[#FEF3E7] text-[#B45309] border border-[#F5C78E] rounded text-[9px] font-bold">
+                            DESLIGADOS
+                          </span>
+                        )}
+                        {t.aplicavel_a === 'ativo' && (
+                          <span className="px-1.5 py-0.5 bg-[#E8F6F1] text-[#0F7A5A] border border-[#B8E8D9] rounded text-[9px] font-bold">
+                            SÓ ATIVOS
                           </span>
                         )}
                       </div>
