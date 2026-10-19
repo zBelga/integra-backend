@@ -331,7 +331,7 @@ export interface DocumentoTipo {
   /** Obrigatório para todos os colaboradores, independente da função */
   todos_colaboradores?: boolean;
   /** Para qual status de colaborador este tipo se aplica */
-  aplicavel_a?: 'todos' | 'ativo' | 'desligado';
+  aplicavel_a?: 'todos' | 'desligado' | 'mudanca_funcao';
   created_at?: string;
   updated_at?: string;
 }
@@ -345,7 +345,7 @@ export interface DocumentoTipoFormData {
   dias_alerta: number;
   status: 'ativo' | 'inativo';
   todos_colaboradores?: boolean;
-  aplicavel_a?: 'todos' | 'ativo' | 'desligado';
+  aplicavel_a?: 'todos' | 'desligado' | 'mudanca_funcao';
 }
 
 /** Situação de um item do checklist do colaborador */

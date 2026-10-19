@@ -520,7 +520,7 @@ router.post('/', async (req: Request, res: Response) => {
         padrao: false,
         ordem: 200,
         todos_colaboradores: req.body.todos_colaboradores === true || req.body.todos_colaboradores === 'true',
-        aplicavel_a: ['todos', 'ativo', 'desligado'].includes(req.body.aplicavel_a) ? req.body.aplicavel_a : 'todos',
+        aplicavel_a: ['todos', 'desligado', 'mudanca_funcao'].includes(req.body.aplicavel_a) ? req.body.aplicavel_a : 'todos',
       })
       .select()
       .single();
@@ -599,7 +599,7 @@ router.put('/:id', async (req: Request, res: Response) => {
     if (req.body.todos_colaboradores !== undefined) {
       patch.todos_colaboradores = req.body.todos_colaboradores === true || req.body.todos_colaboradores === 'true';
     }
-    if (req.body.aplicavel_a !== undefined && ['todos', 'ativo', 'desligado'].includes(req.body.aplicavel_a)) {
+    if (req.body.aplicavel_a !== undefined && ['todos', 'desligado', 'mudanca_funcao'].includes(req.body.aplicavel_a)) {
       patch.aplicavel_a = req.body.aplicavel_a;
     }
 

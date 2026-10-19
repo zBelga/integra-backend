@@ -194,8 +194,8 @@ function TipoModal({
               <div className="flex gap-2">
                 {([
                   { value: 'todos', label: 'Todos', desc: 'Ativos e desligados' },
-                  { value: 'ativo', label: 'Apenas ativos', desc: 'Só colaboradores em atividade' },
-                  { value: 'desligado', label: 'Apenas desligados', desc: 'Ex.: ASO Demissional' },
+                  { value: 'desligado', label: 'Desligados', desc: 'Ex.: ASO Demissional' },
+                  { value: 'mudanca_funcao', label: 'Mudança de função', desc: 'Exigido na troca de cargo' },
                 ] as const).map(opt => (
                   <button
                     key={opt.value}
@@ -206,8 +206,8 @@ function TipoModal({
                       form.aplicavel_a === opt.value
                         ? opt.value === 'desligado'
                           ? 'bg-[#FEF3E7] border-[#F5C78E] text-[#B45309]'
-                          : opt.value === 'ativo'
-                            ? 'bg-[#E8F6F1] border-[#B8E8D9] text-[#0F7A5A]'
+                          : opt.value === 'mudanca_funcao'
+                            ? 'bg-[#F1ECFE] border-[#E1D9FB] text-[#6D28D9]'
                             : 'bg-[#EEF4F7] border-[#B6D4E0] text-[#176B87]'
                         : 'bg-white border-[#DDE3E8] text-[#8995A1] hover:border-[#B6C2CC]'
                     }`}
@@ -692,9 +692,9 @@ export const TiposDocumentoView: React.FC = () => {
                             DESLIGADOS
                           </span>
                         )}
-                        {t.aplicavel_a === 'ativo' && (
-                          <span className="px-1.5 py-0.5 bg-[#E8F6F1] text-[#0F7A5A] border border-[#B8E8D9] rounded text-[9px] font-bold">
-                            SÓ ATIVOS
+                        {t.aplicavel_a === 'mudanca_funcao' && (
+                          <span className="px-1.5 py-0.5 bg-[#F1ECFE] text-[#6D28D9] border border-[#E1D9FB] rounded text-[9px] font-bold">
+                            MUDANÇA DE FUNÇÃO
                           </span>
                         )}
                       </div>

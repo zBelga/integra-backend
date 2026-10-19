@@ -177,8 +177,10 @@ async function exigenciasDaFuncao(sb: SupabaseClient, empresa_id: string, funcao
   const exigidos = new Set((regras || []).map(r => r.tipo_id));
   // Tipo desativado sai da conta de pendências automaticamente (filtro status=ativo acima)
   // Filtra por aplicavel_a: só mostra tipos compatíveis com o status do colaborador
+  // 'mudanca_funcao' não aparece no checklist regular — é sob demanda
   const tiposFiltrados = (tipos || []).filter(t => {
     const aplica = t.aplicavel_a || 'todos';
+    if (aplica === 'mudanca_funcao') return false;
     return aplica === 'todos' || aplica === statusColab;
   });
   return {
