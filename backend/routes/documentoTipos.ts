@@ -15,6 +15,9 @@ import { podeNaTela, exigirAlgumaTela } from '../utils/permissoes.js';
 
 const router = Router();
 
+/** Controla se garantir_tipos_padrao já rodou para cada empresa nesta instância do servidor. */
+const empresasComTiposPadrao = new Set<string>();
+
 let _sb: SupabaseClient | null = null;
 function getSupabase(): SupabaseClient {
   if (_sb) return _sb;
@@ -446,8 +449,13 @@ router.get('/', exigirAlgumaTela(['documentacao.documentos', 'documentacao.tipos
     if (!empresa_id) return res.status(400).json({ success: false, error: 'Empresa não identificada.' });
 
     const sb = getSupabase();
-    const { error: erroCatalogo } = await sb.rpc('garantir_tipos_padrao', { p_empresa_id: empresa_id });
-    if (erroCatalogo) throw erroCatalogo;
+
+    // garantir_tipos_padrao recria tipos deletados — chamamos UMA VEZ por empresa, não toda listagem.
+    if (!empresasComTiposPadrao.has(empresa_id)) {
+      const { error: erroCatalogo } = await sb.rpc('garantir_tipos_padrao', { p_empresa_id: empresa_id });
+      if (erroCatalogo) console.warn('[Tipos] garantir_tipos_padrao falhou:', erroCatalogo.message);
+      empresasComTiposPadrao.add(empresa_id);
+    }
 
     let q = sb.from('documento_tipos').select('*').eq('empresa_id', empresa_id);
     if (req.query.status && req.query.status !== 'all') q = q.eq('status', String(req.query.status));
