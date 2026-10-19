@@ -415,15 +415,15 @@ router.put('/:id', exigirTela('administrativo.admissoes', 'editar'), async (req:
     const trimmedDataASO = typeof data_aso === 'string' ? data_aso.trim() : '';
 
     await executeQuery(
-      `UPDATE admissoes 
-       SET nome = ?, funcao = ?, cpf = ?, rg = ?, data_nascimento = ?, obra_id = ?, data_exame = ?, data_aso = ?, previsao_contratacao = ?, updated_at = CURRENT_TIMESTAMP
+      `UPDATE admissoes
+       SET nome = ?, funcao = ?, cpf = ?, rg = ?, data_nascimento = COALESCE(?, data_nascimento, ''), obra_id = ?, data_exame = ?, data_aso = ?, previsao_contratacao = ?, updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
       [
         nome.trim(),
         funcao.trim(),
         cleanedCPF,
         trimmedRG,
-        data_nascimento,
+        data_nascimento || null,
         obra_id,
         trimmedDataExame,
         trimmedDataASO,
