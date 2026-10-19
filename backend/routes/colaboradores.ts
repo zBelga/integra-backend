@@ -212,4 +212,47 @@ router.post('/:id/reativar', exigirExtra('administrativo.efetivo', 'desligar'), 
   }
 });
 
+/**
+ * POST /api/colaboradores/:id/promover
+ *
+ * Mudança de função. Registra a nova função e guarda a data da mudança.
+ * Documentos com aplicavel_a = 'mudanca_funcao' passam a aparecer
+ * como pendentes no checklist do colaborador.
+ */
+router.post('/:id/promover', exigirTela('administrativo.efetivo', 'editar'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const novaFuncao = String(req.body?.nova_funcao || '').trim();
+
+    if (!novaFuncao) return res.status(400).json({ success: false, error: 'Informe a nova função.' });
+
+    const atual = await queryRows('SELECT id, nome, funcao, empresa_id FROM colaboradores WHERE id = ?', [id]);
+    if (!atual.length) return res.status(404).json({ success: false, error: 'Colaborador não encontrado.' });
+    if (!mesmaEmpresa(req, atual[0].empresa_id)) {
+      return res.status(403).json({ success: false, error: 'Colaborador de outra empresa.' });
+    }
+
+    const funcaoAnterior = atual[0].funcao || '';
+    if (novaFuncao.toUpperCase() === funcaoAnterior.toUpperCase()) {
+      return res.status(400).json({ success: false, error: 'A nova função é igual à atual.' });
+    }
+
+    const agora = new Date().toISOString().split('T')[0];
+    await executeQuery(
+      `UPDATE colaboradores
+          SET funcao = ?, funcao_anterior = ?, data_mudanca_funcao = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?`,
+      [novaFuncao, funcaoAnterior, agora, id]
+    );
+
+    res.json({
+      success: true,
+      message: `${atual[0].nome}: ${funcaoAnterior} → ${novaFuncao}`,
+      data: { funcao_anterior: funcaoAnterior, nova_funcao: novaFuncao, data_mudanca_funcao: agora },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 export default router;

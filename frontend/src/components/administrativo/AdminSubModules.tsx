@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   ArrowLeft, Users, Search, Edit2, FileText, Columns3, Check, Download,
-  UserMinus, RotateCcw, X, AlertCircle, CheckCircle2,
+  UserMinus, RotateCcw, X, AlertCircle, CheckCircle2, ArrowUpRight,
 } from 'lucide-react';
 import { EditColaboradorModal } from './EditColaboradorModal';
 import {
   updateColaborador, fetchColaboradores, fetchObras,
-  desligarColaborador, reativarColaborador,
+  desligarColaborador, reativarColaborador, promoverColaborador,
 } from '../../services/api';
 import { Colaborador, PermissoesUsuario } from '../../types';
 import { applyCPFMask, formatDateBR } from '../../utils/cpfMask';
@@ -117,6 +117,9 @@ export const AdminSubModuleView: React.FC<AdminSubModuleViewProps> = ({
   const [dataDesligamento, setDataDesligamento] = useState(hojeIso);
   const [motivoDesligamento, setMotivoDesligamento] = useState('');
   const [salvandoDesligamento, setSalvandoDesligamento] = useState(false);
+  const [promovendo, setPromovendo] = useState<Colaborador | null>(null);
+  const [novaFuncao, setNovaFuncao] = useState('');
+  const [salvandoPromocao, setSalvandoPromocao] = useState(false);
   const [aviso, setAviso] = useState('');
   const [erro, setErro] = useState('');
   const [colunas, setColunas] = useState<Record<ColunaId, boolean>>(lerColunasSalvas);
@@ -208,6 +211,29 @@ export const AdminSubModuleView: React.FC<AdminSubModuleViewProps> = ({
       await loadColaboradores();
     } catch (e: any) {
       setErro(e.message || 'Não foi possível reativar o colaborador.');
+    }
+  };
+
+  const abrirPromocao = (col: Colaborador) => {
+    setErro(''); setAviso('');
+    setNovaFuncao('');
+    setPromovendo(col);
+  };
+
+  const confirmarPromocao = async () => {
+    if (!promovendo) return;
+    if (!novaFuncao.trim()) { setErro('Informe a nova função.'); return; }
+    setErro('');
+    setSalvandoPromocao(true);
+    try {
+      const res = await promoverColaborador(promovendo.id, novaFuncao.trim());
+      setPromovendo(null);
+      setAviso(res.message || 'Função alterada.');
+      await loadColaboradores();
+    } catch (e: any) {
+      setErro(e.message || 'Não foi possível alterar a função.');
+    } finally {
+      setSalvandoPromocao(false);
     }
   };
 
@@ -569,6 +595,14 @@ export const AdminSubModuleView: React.FC<AdminSubModuleViewProps> = ({
                             >
                               <Edit2 className="w-3.5 h-3.5" />
                             </button>
+                            <button
+                              onClick={() => abrirPromocao(col)}
+                              className="ml-1 p-1 text-[#687582] hover:text-[#6D28D9] hover:bg-[#F1ECFE] rounded-md transition-colors cursor-pointer"
+                              title="Mudança de função"
+                              aria-label={`Mudar função de ${col.nome}`}
+                            >
+                              <ArrowUpRight className="w-3.5 h-3.5" />
+                            </button>
                             {podeDesligar && (
                               <button
                                 onClick={() => abrirDesligamento(col)}
@@ -662,6 +696,72 @@ export const AdminSubModuleView: React.FC<AdminSubModuleViewProps> = ({
                   <span className="inline-block w-3.5 h-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
                 )}
                 Confirmar desligamento
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Mudança de Função */}
+      {promovendo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-xl border border-[#DDE3E8] shadow-xl w-full max-w-md">
+            <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-[#EDF1F4]">
+              <div className="flex items-start gap-2.5">
+                <span className="w-9 h-9 rounded-xl bg-[#F1ECFE] border border-[#E1D9FB] flex items-center justify-center shrink-0">
+                  <ArrowUpRight className="w-4 h-4 text-[#6D28D9]" />
+                </span>
+                <div>
+                  <h3 className="text-sm font-bold text-[#17212B]">Mudança de Função</h3>
+                  <p className="text-xs text-[#687582] mt-0.5">{promovendo.nome}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setPromovendo(null)}
+                className="p-1 rounded-md text-[#687582] hover:bg-[#F4F6F8] cursor-pointer"
+                aria-label="Fechar"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="px-5 py-4 space-y-3">
+              <label className="block">
+                <span className="text-[11px] font-semibold text-[#687582]">Função atual</span>
+                <input
+                  value={promovendo.funcao || '—'}
+                  disabled
+                  className="mt-1 w-full px-3 py-2 text-xs border border-[#DDE3E8] rounded-lg bg-[#F4F6F8] text-[#8995A1]"
+                />
+              </label>
+              <label className="block">
+                <span className="text-[11px] font-semibold text-[#687582]">Nova função *</span>
+                <input
+                  value={novaFuncao}
+                  onChange={e => setNovaFuncao(e.target.value)}
+                  placeholder="Informe a nova função..."
+                  autoFocus
+                  className="mt-1 w-full px-3 py-2 text-xs border border-[#DDE3E8] rounded-lg outline-none focus:border-[#6D28D9] focus:ring-1 focus:ring-[#6D28D9]"
+                />
+              </label>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[#EDF1F4]">
+              <button
+                onClick={() => setPromovendo(null)}
+                className="px-3 py-2 text-xs font-semibold text-[#687582] border border-[#DDE3E8] rounded-lg hover:bg-[#F4F6F8] transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmarPromocao}
+                disabled={salvandoPromocao || !novaFuncao.trim()}
+                className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-white bg-[#6D28D9] hover:bg-[#5b21b6] disabled:opacity-60 rounded-lg transition-colors cursor-pointer"
+              >
+                {salvandoPromocao && (
+                  <span className="inline-block w-3.5 h-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                )}
+                Confirmar mudança
               </button>
             </div>
           </div>

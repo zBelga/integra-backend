@@ -163,8 +163,8 @@ async function funcaoDeDocumentos(
 }
 
 /** Busca as exigências da função, já resolvidas para os tipos ativos da empresa.
- *  statusColab filtra tipos por aplicavel_a (todos, ativo, desligado). */
-async function exigenciasDaFuncao(sb: SupabaseClient, empresa_id: string, funcao: string, statusColab: string = 'ativo') {
+ *  statusColab filtra tipos por aplicavel_a (todos, desligado, mudanca_funcao). */
+async function exigenciasDaFuncao(sb: SupabaseClient, empresa_id: string, funcao: string, statusColab: string = 'ativo', temMudancaFuncao = false) {
   const [{ data: tipos }, { data: regras }] = await Promise.all([
     sb.from('documento_tipos').select('*').eq('empresa_id', empresa_id).eq('status', 'ativo'),
     sb
@@ -177,10 +177,10 @@ async function exigenciasDaFuncao(sb: SupabaseClient, empresa_id: string, funcao
   const exigidos = new Set((regras || []).map(r => r.tipo_id));
   // Tipo desativado sai da conta de pendências automaticamente (filtro status=ativo acima)
   // Filtra por aplicavel_a: só mostra tipos compatíveis com o status do colaborador
-  // 'mudanca_funcao' não aparece no checklist regular — é sob demanda
+  // 'mudanca_funcao' aparece apenas se o colaborador passou por mudança de função
   const tiposFiltrados = (tipos || []).filter(t => {
     const aplica = t.aplicavel_a || 'todos';
-    if (aplica === 'mudanca_funcao') return false;
+    if (aplica === 'mudanca_funcao') return temMudancaFuncao;
     return aplica === 'todos' || aplica === statusColab;
   });
   return {
@@ -241,8 +241,9 @@ router.get('/checklist/:colaboradorId', async (req: Request, res: Response) => {
     const funcaoDoc = await funcaoDeDocumentos(sb, colaborador);
 
     const statusColab = colaborador.status || 'ativo';
+    const temMudancaFuncao = !!colaborador.data_mudanca_funcao;
     const [{ todosOsTipos, tiposExigidos }, { data: docs, error }] = await Promise.all([
-      exigenciasDaFuncao(sb, empresa_id, funcaoDoc.funcao, statusColab),
+      exigenciasDaFuncao(sb, empresa_id, funcaoDoc.funcao, statusColab, temMudancaFuncao),
       sb
         .from('documentos')
         .select('id, tipo, tipo_id, nome, nome_arquivo, tamanho_bytes, data_emissao, data_vencimento, status, observacoes, created_at')

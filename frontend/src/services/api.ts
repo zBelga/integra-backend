@@ -1166,6 +1166,20 @@ export async function desligarColaborador(
   return json;
 }
 
+/** Muda a função do colaborador (promoção / mudança de cargo). */
+export async function promoverColaborador(
+  id: string,
+  nova_funcao: string
+): Promise<{ success: boolean; message?: string }> {
+  const res = await apiFetch(`/api/colaboradores/${id}/promover`, {
+    method: 'POST',
+    body: JSON.stringify({ nova_funcao }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Erro ao mudar a função');
+  return json;
+}
+
 /** Desfaz o desligamento e devolve o colaborador ao efetivo. */
 export async function reativarColaborador(id: string): Promise<{ success: boolean; message?: string }> {
   const res = await apiFetch(`/api/colaboradores/${id}/reativar`, { method: 'POST' });
