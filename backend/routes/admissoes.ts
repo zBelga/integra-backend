@@ -3,6 +3,7 @@ import { queryRows, executeQuery } from '../db.js';
 import { cleanCPF, isValidCPF } from '../utils/cpf.js';
 
 import { exigirTela, exigirExtra, empresaDoPedido } from '../utils/permissoes.js';
+import { getSupabase } from '../supabase.js';
 
 const router = Router();
 
@@ -528,6 +529,25 @@ router.post('/:id/contratar', exigirExtra('administrativo.admissoes', 'contratar
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
         dadosColaborador
       );
+    }
+
+    // Re-linkar documentos que foram anexados durante a admissão (adm-xxx → col-xxx)
+    try {
+      const sb = getSupabase();
+      if (sb) {
+        const { data: docsAdm, error: errDocs } = await sb
+          .from('documentos')
+          .update({ colaborador_id: colaboradorId })
+          .eq('colaborador_id', id)
+          .select('id');
+        if (errDocs) {
+          console.warn(`[contratar] Falha ao re-linkar docs de ${id} → ${colaboradorId}:`, errDocs.message);
+        } else if (docsAdm && docsAdm.length > 0) {
+          console.log(`[contratar] ${docsAdm.length} documento(s) re-linkado(s) de ${id} → ${colaboradorId}`);
+        }
+      }
+    } catch (e: any) {
+      console.warn('[contratar] Erro ao re-linkar documentos:', e.message);
     }
 
     // Remove from admissoes

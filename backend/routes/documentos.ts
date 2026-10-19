@@ -20,7 +20,31 @@ const empresasComTiposPadrao = new Set<string>();
 async function buscarColaborador(id: string): Promise<any | null> {
   if (!id) return null;
   const rows = (await queryRows('SELECT * FROM colaboradores WHERE id = ?', [id])) as any[];
-  return rows[0] || null;
+  if (rows[0]) return rows[0];
+
+  // Admissão (adm-xxx) também pode ter documentos — mapeia para shape de colaborador
+  if (id.startsWith('adm-')) {
+    const admRows = (await queryRows('SELECT * FROM admissoes WHERE id = ?', [id])) as any[];
+    if (admRows[0]) {
+      const adm = admRows[0];
+      return {
+        id: adm.id,
+        empresa_id: adm.empresa_id,
+        nome: adm.nome,
+        funcao: adm.funcao,
+        cpf: adm.cpf,
+        rg: adm.rg || '',
+        numero_chapa: '',
+        obra_id: adm.obra_id,
+        data_admissao: adm.previsao_contratacao || '',
+        data_aso: adm.data_aso || '',
+        status: 'contratando',
+        created_at: adm.created_at,
+        updated_at: adm.updated_at,
+      };
+    }
+  }
+  return null;
 }
 
 /** Histórico de envio/substituição/exclusão. Nunca derruba a operação principal. */

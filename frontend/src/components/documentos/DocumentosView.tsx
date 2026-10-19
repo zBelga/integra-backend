@@ -4,6 +4,7 @@ import {
   Search,
   User,
   UserMinus,
+  UserPlus,
   FileText,
   AlertCircle,
   Clock,
@@ -14,16 +15,18 @@ import {
   RefreshCw,
   AlertTriangle,
   X,
+  Calendar,
 } from 'lucide-react';
 import { ColaboradorPerfil } from './ColaboradorPerfil';
 import {
   fetchColaboradores,
+  fetchAdmissoes,
   fetchResumoDocumentos,
   fetchDocumentoTipos,
   fetchExigenciasResumo,
   DocumentoResumo,
 } from '../../services/api';
-import { Colaborador, DocumentoTipo } from '../../types';
+import { Colaborador, Admissao, DocumentoTipo } from '../../types';
 import { situacaoDoDocumento, diasParaVencer } from '../../constants/documentosUI';
 import { formatDateBR } from '../../utils/cpfMask';
 
@@ -55,7 +58,7 @@ interface DocumentosViewProps {
 }
 
 export const DocumentosView: React.FC<DocumentosViewProps> = ({ selectedEmpresaId, onConfigurarExigencias }) => {
-  const [aba, setAba] = useState<'ativo' | 'desligado'>('ativo');
+  const [aba, setAba] = useState<'ativo' | 'desligado' | 'contratado'>('ativo');
   const [lista, setLista] = useState<ColaboradorComDocs[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -64,11 +67,39 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({ selectedEmpresaI
   const [showAlertas, setShowAlertas] = useState(true);
   const [tiposAtivos, setTiposAtivos] = useState<DocumentoTipo[]>([]);
 
+  /** Converte uma admissão para o shape de Colaborador (usado na aba Contratados). */
+  const admissaoParaColaborador = (adm: Admissao): Colaborador => ({
+    id: adm.id,
+    empresa_id: adm.empresa_id || '',
+    nome: adm.nome,
+    funcao: adm.funcao,
+    cpf: adm.cpf,
+    rg: adm.rg || '',
+    numero_chapa: '',
+    obra_id: adm.obra_id,
+    obra_nome: adm.obra_nome,
+    obra_codigo: adm.obra_codigo,
+    data_admissao: adm.previsao_contratacao || '',
+    data_aso: adm.data_aso || '',
+    status: 'ativo',
+    created_at: adm.created_at,
+    updated_at: adm.updated_at,
+  });
+
   const loadDados = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await fetchColaboradores({ search: '', limit: 500, status: aba });
-      const colaboradores: Colaborador[] = res.data || [];
+      let colaboradores: Colaborador[] = [];
+
+      if (aba === 'contratado') {
+        // Aba Contratados: carrega admissões e mapeia para shape de Colaborador
+        const admRes = await fetchAdmissoes({ limit: 500 });
+        const admissoes: Admissao[] = admRes.data || [];
+        colaboradores = admissoes.map(admissaoParaColaborador);
+      } else {
+        const res = await fetchColaboradores({ search: '', limit: 500, status: aba });
+        colaboradores = res.data || [];
+      }
 
       // Uma única requisição traz o resumo de todos (antes era uma por pessoa)
       let resumo: Record<string, { total: number; tipos: string[]; tipo_ids?: string[]; docs: DocumentoResumo[] }> = {};
@@ -130,7 +161,7 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({ selectedEmpresaI
   useEffect(() => { loadDados(); }, [loadDados]);
 
   // Resetar filtro ao trocar de aba
-  const trocarAba = (novaAba: 'ativo' | 'desligado') => {
+  const trocarAba = (novaAba: 'ativo' | 'desligado' | 'contratado') => {
     if (novaAba === aba) return;
     setAba(novaAba);
     setFiltro('todos');
@@ -235,6 +266,8 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({ selectedEmpresaI
           <p className="text-xs text-[#687582] mt-0.5">
             {aba === 'ativo'
               ? 'Controle de documentos, vencimentos e pendências de cada colaborador do efetivo'
+              : aba === 'contratado'
+              ? 'Documentos de pessoas em processo de admissão'
               : 'Documentos de colaboradores desligados'}
           </p>
         </div>
@@ -257,7 +290,7 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({ selectedEmpresaI
         </div>
       </div>
 
-      {/* Abas Efetivo / Desligados */}
+      {/* Abas Efetivo / Contratados / Desligados */}
       <div className="flex gap-1">
         <button
           onClick={() => trocarAba('ativo')}
@@ -268,6 +301,16 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({ selectedEmpresaI
           }`}
         >
           <User className="w-3.5 h-3.5" /> Efetivo
+        </button>
+        <button
+          onClick={() => trocarAba('contratado')}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
+            aba === 'contratado'
+              ? 'bg-[#D4890A] text-white border-[#D4890A]'
+              : 'bg-white text-[#687582] border-[#DDE3E8] hover:border-[#D4890A] hover:text-[#D4890A]'
+          }`}
+        >
+          <UserPlus className="w-3.5 h-3.5" /> Contratados
         </button>
         <button
           onClick={() => trocarAba('desligado')}
@@ -426,7 +469,7 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({ selectedEmpresaI
         {isLoading ? (
           <div className="p-10 text-center">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-[#176B87] border-t-transparent" />
-            <p className="mt-3 text-xs text-[#687582]">Carregando colaboradores...</p>
+            <p className="mt-3 text-xs text-[#687582]">{aba === 'contratado' ? 'Carregando admissões...' : 'Carregando colaboradores...'}</p>
           </div>
         ) : filtrados.length === 0 ? (
           <div className="p-12 text-center">
@@ -436,6 +479,8 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({ selectedEmpresaI
               {lista.length === 0
                 ? aba === 'desligado'
                   ? 'Nenhum colaborador desligado no momento.'
+                  : aba === 'contratado'
+                  ? 'Nenhuma admissão em andamento no momento.'
                   : 'Adicione colaboradores ao efetivo primeiro.'
                 : 'Tente ajustar o filtro ou a busca.'}
             </p>
@@ -444,14 +489,19 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({ selectedEmpresaI
           <div className="overflow-x-auto">
             <div className="min-w-[860px]">
               {/* Cabeçalho */}
-              <div className={`bg-[#F8FAFB] px-5 py-2.5 grid gap-3 text-[10px] font-bold text-[#687582] uppercase tracking-wider border-b border-[#DDE3E8] ${aba === 'desligado' ? 'grid-cols-12' : 'grid-cols-12'}`}>
+              <div className="bg-[#F8FAFB] px-5 py-2.5 grid grid-cols-12 gap-3 text-[10px] font-bold text-[#687582] uppercase tracking-wider border-b border-[#DDE3E8]">
                 <div className="col-span-1 text-center">#</div>
-                <div className={aba === 'desligado' ? 'col-span-3' : 'col-span-3'}>Colaborador</div>
+                <div className="col-span-3">Colaborador</div>
                 <div className="col-span-2">Função / Obra</div>
-                <div className={aba === 'desligado' ? 'col-span-2 text-center' : 'col-span-2 text-center'}>Documentos</div>
+                <div className="col-span-2 text-center">Documentos</div>
                 {aba === 'desligado' ? (
                   <>
                     <div className="col-span-2 text-center">Desligado em</div>
+                    <div className="col-span-1 text-center">Status</div>
+                  </>
+                ) : aba === 'contratado' ? (
+                  <>
+                    <div className="col-span-3 text-center">Prev. Contratação</div>
                     <div className="col-span-1 text-center">Status</div>
                   </>
                 ) : (
@@ -542,6 +592,21 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({ selectedEmpresaI
                             <ChevronRight className="w-3.5 h-3.5 text-[#8995A1] group-hover:text-[#176B87] transition-colors" />
                           </div>
                         </>
+                      ) : aba === 'contratado' ? (
+                        <>
+                          {/* Previsão de contratação */}
+                          <div className="col-span-3 text-center">
+                            <div className="text-[11px] text-[#687582] flex items-center justify-center gap-1">
+                              <Calendar className="w-3 h-3" />
+                              {col.data_admissao ? formatDateBR(col.data_admissao) : '—'}
+                            </div>
+                          </div>
+                          {/* Status */}
+                          <div className="col-span-1 flex items-center justify-center gap-1">
+                            <UserPlus className="w-4 h-4 text-[#D4890A]" title="Em admissão" />
+                            <ChevronRight className="w-3.5 h-3.5 text-[#8995A1] group-hover:text-[#176B87] transition-colors" />
+                          </div>
+                        </>
                       ) : (
                         <>
                           {/* Pendências */}
@@ -596,7 +661,7 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({ selectedEmpresaI
       {!isLoading && lista.length > 0 && (
         <div className="flex items-center justify-between text-[11px] text-[#687582] flex-wrap gap-2">
           <span>
-            Exibindo {filtrados.length} de {lista.length} colaborador{lista.length !== 1 ? 'es' : ''}
+            Exibindo {filtrados.length} de {lista.length} {aba === 'contratado' ? (lista.length !== 1 ? 'admissões' : 'admissão') : `colaborador${lista.length !== 1 ? 'es' : ''}`}
           </span>
           <span>
             {tiposAtivos.length} tipos ativos no catálogo · obrigatoriedade definida por função
