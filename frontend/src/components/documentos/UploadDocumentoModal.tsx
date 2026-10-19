@@ -59,9 +59,11 @@ export const UploadDocumentoModal: React.FC<UploadDocumentoModalProps> = ({
   }, [tipoPreSelecionado]);
 
   // Sugere o vencimento a partir da emissão + validade do tipo
+  // Se validade_meses não foi definido mas tem_validade=true, usa 12 meses como padrão
   useEffect(() => {
-    if (dataEmissao && tipoCfg?.tem_validade && tipoCfg.validade_meses && !dataVencimento) {
-      setDataVencimento(addMeses(dataEmissao, tipoCfg.validade_meses));
+    if (dataEmissao && tipoCfg?.tem_validade && !dataVencimento) {
+      const meses = tipoCfg.validade_meses || 12;
+      setDataVencimento(addMeses(dataEmissao, meses));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataEmissao, tipoId]);

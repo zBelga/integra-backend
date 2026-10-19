@@ -116,8 +116,8 @@ export const AnexarLoteModal: React.FC<AnexarLoteModalProps> = ({
     const tipo = tipoPorId.get(l.tipoId);
     const patch: Partial<Linha> = { emissao, erro: '' };
     // Sugere a validade pelo padrão do tipo, sem sobrescrever o que já foi digitado
-    if (emissao && tipo?.tem_validade && tipo.validade_meses && !l.validade) {
-      patch.validade = addMeses(emissao, tipo.validade_meses);
+    if (emissao && tipo?.tem_validade && !l.validade) {
+      patch.validade = addMeses(emissao, tipo.validade_meses || 12);
     }
     atualizar(l.chave, patch);
   };
