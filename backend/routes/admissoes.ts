@@ -100,9 +100,10 @@ router.get('/', exigirTela('administrativo.admissoes', 'ver'), async (req: Reque
     const params: any[] = [];
 
     // Isolamento entre empresas: a lista só traz as admissões da empresa ativa.
+    // Inclui também registros com empresa_id NULL (legado antes do fix).
     const empresaAtiva = empresaDoPedido(req);
     if (empresaAtiva) {
-      whereClauses.push('a.empresa_id = ?');
+      whereClauses.push('(a.empresa_id = ? OR a.empresa_id IS NULL)');
       params.push(empresaAtiva);
     }
 
@@ -309,17 +310,21 @@ router.post('/', exigirTela('administrativo.admissoes', 'criar'), async (req: Re
     const trimmedDataExame = typeof data_exame === 'string' ? data_exame.trim() : '';
     const trimmedDataASO = typeof data_aso === 'string' ? data_aso.trim() : '';
 
+    // empresa_id é obrigatório para isolamento de dados entre empresas
+    const empresa_id = empresaDoPedido(req);
+
     await executeQuery(
       `INSERT INTO admissoes (
-        id, nome, funcao, cpf, rg, data_nascimento, obra_id, data_exame, data_aso, previsao_contratacao, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+        id, empresa_id, nome, funcao, cpf, rg, data_nascimento, obra_id, data_exame, data_aso, previsao_contratacao, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
       [
         id,
+        empresa_id,
         trimmedNome,
         trimmedFuncao,
         cleanedCPF,
         trimmedRG,
-        data_nascimento,
+        data_nascimento || '',
         obra_id,
         trimmedDataExame,
         trimmedDataASO,

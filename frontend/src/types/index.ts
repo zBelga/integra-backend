@@ -28,7 +28,7 @@ export interface Admissao {
   funcao: string;
   cpf: string;
   rg?: string;
-  data_nascimento: string;
+  data_nascimento?: string;
   obra_id: string;
   obra_nome?: string;
   obra_codigo?: string;
@@ -44,7 +44,6 @@ export interface AdmissaoFormData {
   funcao: string;
   cpf: string;
   rg?: string;
-  data_nascimento: string;
   obra_id: string;
   data_exame?: string;
   data_aso?: string;
