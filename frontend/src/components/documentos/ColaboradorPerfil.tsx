@@ -225,6 +225,8 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
   const [pagina, setPagina] = useState(1);
   /** Sobe a cada mudança; o painel de histórico usa para se atualizar */
   const [versao, setVersao] = useState(0);
+  const [baixandoTodos, setBaixandoTodos] = useState(false);
+  const [baixandoProgresso, setBaixandoProgresso] = useState('');
 
   const carregar = useCallback(async () => {
     setIsLoading(true);
@@ -386,6 +388,32 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
     } finally {
       setOcupadoId(null);
     }
+  };
+
+  const handleBaixarTodos = async () => {
+    const docs = anexados.filter(d => d.nome_arquivo);
+    if (docs.length === 0) return;
+    setBaixandoTodos(true);
+    let ok = 0;
+    let falhas = 0;
+    for (const doc of docs) {
+      setBaixandoProgresso(`${ok + falhas + 1}/${docs.length}`);
+      try {
+        const res = await downloadDocumento(doc.id, true);
+        const a = document.createElement('a');
+        a.href = res.url;
+        a.download = res.nome_download || res.nome_arquivo || doc.nome_arquivo;
+        a.click();
+        ok++;
+        // Pequena pausa entre downloads para não sobrecarregar o navegador
+        if (ok < docs.length) await new Promise(r => setTimeout(r, 400));
+      } catch {
+        falhas++;
+      }
+    }
+    setBaixandoTodos(false);
+    setBaixandoProgresso('');
+    if (falhas > 0) setError(`${falhas} documento(s) não puderam ser baixados.`);
   };
 
   const pct = ind?.conformidade ?? 0;
@@ -751,6 +779,26 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
                 title="Limpar filtro"
               >
                 {ESTILO_SITUACAO[filtroStatus].rotulo} <X className="w-3 h-3" />
+              </button>
+            )}
+            {podeBaixar && anexados.length > 0 && (
+              <button
+                onClick={handleBaixarTodos}
+                disabled={baixandoTodos}
+                title="Baixar todos os documentos"
+                className="flex items-center gap-1.5 px-3 py-2 text-[11px] font-semibold text-[#176B87] bg-[#EEF4F7] hover:bg-[#DCE9EE] border border-[#C8DDE4] rounded-xl transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {baixandoTodos ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-[#176B87]/30 border-t-[#176B87] rounded-full animate-spin" />
+                    {baixandoProgresso}
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-3.5 h-3.5" />
+                    Baixar todos
+                  </>
+                )}
               </button>
             )}
             <div className="flex border border-[#DDE3E8] rounded-xl overflow-hidden">
