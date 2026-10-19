@@ -16,8 +16,9 @@ const router = Router();
 /** Controla se garantir_tipos_padrao já rodou para cada empresa nesta instância do servidor. */
 const empresasComTiposPadrao = new Set<string>();
 
-/** Colaborador vem do banco do servidor — é a fonte da empresa dele. */
-async function buscarColaborador(id: string): Promise<any | null> {
+/** Colaborador vem do banco do servidor — é a fonte da empresa dele.
+ *  empresaFallback é usado quando a admissão não tem empresa_id (legado). */
+async function buscarColaborador(id: string, empresaFallback?: string): Promise<any | null> {
   if (!id) return null;
   const rows = (await queryRows('SELECT * FROM colaboradores WHERE id = ?', [id])) as any[];
   if (rows[0]) return rows[0];
@@ -29,7 +30,7 @@ async function buscarColaborador(id: string): Promise<any | null> {
       const adm = admRows[0];
       return {
         id: adm.id,
-        empresa_id: adm.empresa_id,
+        empresa_id: adm.empresa_id || empresaFallback || '',
         nome: adm.nome,
         funcao: adm.funcao,
         cpf: adm.cpf,
@@ -215,7 +216,7 @@ router.get('/checklist/:colaboradorId', async (req: Request, res: Response) => {
   try {
     const sb = getSupabase();
 
-    const colaborador = await buscarColaborador(req.params.colaboradorId);
+    const colaborador = await buscarColaborador(req.params.colaboradorId, empresaDoPedido(req));
     if (!colaborador) {
       return res.status(404).json({ success: false, error: 'Colaborador não encontrado.' });
     }
@@ -347,7 +348,7 @@ router.get('/checklist/:colaboradorId', async (req: Request, res: Response) => {
 router.put('/funcao/:colaboradorId', async (req: Request, res: Response) => {
   try {
     const sb = getSupabase();
-    const colaborador = await buscarColaborador(req.params.colaboradorId);
+    const colaborador = await buscarColaborador(req.params.colaboradorId, empresaDoPedido(req));
     if (!colaborador) return res.status(404).json({ success: false, error: 'Colaborador não encontrado.' });
     if (!mesmaEmpresa(req, colaborador.empresa_id)) {
       return res.status(403).json({ success: false, error: 'Colaborador de outra empresa.' });
@@ -449,7 +450,7 @@ router.get('/permissoes', async (req: Request, res: Response) => {
  */
 router.get('/historico/:colaboradorId', async (req: Request, res: Response) => {
   try {
-    const colaborador = await buscarColaborador(req.params.colaboradorId);
+    const colaborador = await buscarColaborador(req.params.colaboradorId, empresaDoPedido(req));
     if (!colaborador) return res.status(404).json({ success: false, error: 'Colaborador não encontrado.' });
     if (!mesmaEmpresa(req, colaborador.empresa_id)) {
       return res.status(403).json({ success: false, error: 'Colaborador de outra empresa.' });
@@ -485,7 +486,7 @@ router.get('/historico/:colaboradorId', async (req: Request, res: Response) => {
 // GET /api/documentos/colaborador/:id — documentos ATIVOS de um colaborador
 router.get('/colaborador/:id', async (req: Request, res: Response) => {
   try {
-    const colaborador = await buscarColaborador(req.params.id);
+    const colaborador = await buscarColaborador(req.params.id, empresaDoPedido(req));
     if (!colaborador) return res.status(404).json({ success: false, error: 'Colaborador não encontrado.' });
     if (!mesmaEmpresa(req, colaborador.empresa_id)) {
       return res.status(403).json({ success: false, error: 'Colaborador de outra empresa.' });
@@ -531,7 +532,7 @@ router.post('/upload', async (req: Request, res: Response) => {
     }
 
     // A empresa vem do CADASTRO do colaborador, nunca do que a tela mandou
-    const colaborador = await buscarColaborador(colaborador_id);
+    const colaborador = await buscarColaborador(colaborador_id, empresaDoPedido(req));
     if (!colaborador) return res.status(404).json({ success: false, error: 'Colaborador não encontrado.' });
     if (!mesmaEmpresa(req, colaborador.empresa_id)) {
       return res.status(403).json({ success: false, error: 'Colaborador de outra empresa.' });
@@ -694,7 +695,7 @@ router.get('/:id/download', async (req: Request, res: Response) => {
     }
 
     // Nome amigável: ASO_FABRICIO_DE_OLIVEIRA_SILVA.pdf
-    const dono = await buscarColaborador(doc.colaborador_id);
+    const dono = await buscarColaborador(doc.colaborador_id, empresaDoPedido(req));
     const nomeSugerido = nomeParaDownload(doc.tipo, dono?.nome || '', doc.nome_arquivo);
 
     // ?baixar=1 → o próprio link já força o download com o nome certo
