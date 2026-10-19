@@ -501,7 +501,8 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({ selectedEmpresaI
                   </>
                 ) : aba === 'contratado' ? (
                   <>
-                    <div className="col-span-3 text-center">Prev. Contratação</div>
+                    <div className="col-span-1 text-center">Prev. Contrat.</div>
+                    <div className="col-span-2 text-center">Pendências Obrigatórias</div>
                     <div className="col-span-1 text-center">Status</div>
                   </>
                 ) : (
@@ -595,15 +596,44 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({ selectedEmpresaI
                       ) : aba === 'contratado' ? (
                         <>
                           {/* Previsão de contratação */}
-                          <div className="col-span-3 text-center">
-                            <div className="text-[11px] text-[#687582] flex items-center justify-center gap-1">
+                          <div className="col-span-1 text-center">
+                            <div className="text-[10px] text-[#687582] flex items-center justify-center gap-0.5">
                               <Calendar className="w-3 h-3" />
                               {col.data_admissao ? formatDateBR(col.data_admissao) : '—'}
                             </div>
                           </div>
+                          {/* Pendências obrigatórias */}
+                          <div className="col-span-2 text-center">
+                            {pendentes.length === 0 ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#159A72]">
+                                <CheckCircle className="w-3 h-3" /> Completo
+                              </span>
+                            ) : (
+                              <div className="flex items-center justify-center gap-1 flex-wrap">
+                                {pendentes.slice(0, 3).map(p => (
+                                  <span key={p} className="px-1.5 py-0.5 bg-[#EDE9FE] text-[#7C3AED] border border-[#DDD6FE] rounded text-[9px] font-bold">
+                                    {p}
+                                  </span>
+                                ))}
+                                {pendentes.length > 3 && (
+                                  <span className="text-[9px] text-[#7C3AED] font-bold">+{pendentes.length - 3}</span>
+                                )}
+                              </div>
+                            )}
+                          </div>
                           {/* Status */}
                           <div className="col-span-1 flex items-center justify-center gap-1">
-                            <UserPlus className="w-4 h-4 text-[#D4890A]" title="Em admissão" />
+                            {vencidos > 0 ? (
+                              <AlertCircle className="w-4 h-4 text-[#D64550]" title="Documentos vencidos" />
+                            ) : pendentes.length > 0 ? (
+                              <AlertTriangle className="w-4 h-4 text-[#7C3AED]" title="Pendências obrigatórias" />
+                            ) : aVencer > 0 ? (
+                              <Clock className="w-4 h-4 text-[#D4890A]" title="Documentos a vencer" />
+                            ) : totalDocs > 0 ? (
+                              <CheckCircle className="w-4 h-4 text-[#159A72]" title="Regular" />
+                            ) : (
+                              <UserPlus className="w-4 h-4 text-[#D4890A]" title="Em admissão" />
+                            )}
                             <ChevronRight className="w-3.5 h-3.5 text-[#8995A1] group-hover:text-[#176B87] transition-colors" />
                           </div>
                         </>
