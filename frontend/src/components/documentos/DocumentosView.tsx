@@ -606,19 +606,12 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({ selectedEmpresaI
                           <div className="col-span-2 text-center">
                             {pendentes.length === 0 ? (
                               <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#159A72]">
-                                <CheckCircle className="w-3 h-3" /> Completo
+                                <CheckCircle className="w-3 h-3" /> Docs completos
                               </span>
                             ) : (
-                              <div className="flex items-center justify-center gap-1 flex-wrap">
-                                {pendentes.slice(0, 3).map(p => (
-                                  <span key={p} className="px-1.5 py-0.5 bg-[#EDE9FE] text-[#7C3AED] border border-[#DDD6FE] rounded text-[9px] font-bold">
-                                    {p}
-                                  </span>
-                                ))}
-                                {pendentes.length > 3 && (
-                                  <span className="text-[9px] text-[#7C3AED] font-bold">+{pendentes.length - 3}</span>
-                                )}
-                              </div>
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#7C3AED]">
+                                <AlertTriangle className="w-3 h-3" /> {pendentes.length} {pendentes.length === 1 ? 'doc pendente' : 'docs pendentes'}
+                              </span>
                             )}
                           </div>
                           {/* Status */}
@@ -645,19 +638,12 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({ selectedEmpresaI
                               <span className="text-[#8995A1] text-[11px]">—</span>
                             ) : pendentes.length === 0 ? (
                               <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#159A72]">
-                                <CheckCircle className="w-3 h-3" /> Completo
+                                <CheckCircle className="w-3 h-3" /> Docs completos
                               </span>
                             ) : (
-                              <div className="flex items-center justify-center gap-1 flex-wrap">
-                                {pendentes.slice(0, 3).map(p => (
-                                  <span key={p} className="px-1.5 py-0.5 bg-[#EDE9FE] text-[#7C3AED] border border-[#DDD6FE] rounded text-[9px] font-bold">
-                                    {p}
-                                  </span>
-                                ))}
-                                {pendentes.length > 3 && (
-                                  <span className="text-[9px] text-[#7C3AED] font-bold">+{pendentes.length - 3}</span>
-                                )}
-                              </div>
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#7C3AED]">
+                                <AlertTriangle className="w-3 h-3" /> {pendentes.length} {pendentes.length === 1 ? 'doc pendente' : 'docs pendentes'}
+                              </span>
                             )}
                           </div>
 
