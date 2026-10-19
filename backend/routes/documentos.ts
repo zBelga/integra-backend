@@ -42,11 +42,16 @@ async function registrarEventoDocumento(
   }
 }
 
+let _sb: SupabaseClient | null = null;
 function getSupabase() {
+  if (_sb) return _sb;
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) throw new Error('Supabase não configurado no .env');
-  return createClient(url, key);
+  _sb = createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  return _sb;
 }
 
 function generateId() {

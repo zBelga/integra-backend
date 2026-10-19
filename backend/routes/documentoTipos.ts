@@ -15,11 +15,16 @@ import { podeNaTela, exigirAlgumaTela } from '../utils/permissoes.js';
 
 const router = Router();
 
+let _sb: SupabaseClient | null = null;
 function getSupabase(): SupabaseClient {
+  if (_sb) return _sb;
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) throw new Error('Supabase não configurado no .env');
-  return createClient(url, key);
+  _sb = createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  return _sb;
 }
 
 /** empresa_id efetivo: o do token manda; query string só é aceita para o master. */
@@ -735,12 +740,22 @@ router.delete('/:id', async (req: Request, res: Response) => {
       if (error) throw error;
     }
 
-    const { error: erroExclusao } = await sb
+    const { data: deletados, error: erroExclusao } = await sb
       .from('documento_tipos')
       .delete()
       .eq('id', req.params.id)
-      .eq('empresa_id', empresa_id);
+      .eq('empresa_id', empresa_id)
+      .select('id');
     if (erroExclusao) throw erroExclusao;
+
+    // RLS pode bloquear o DELETE silenciosamente (0 linhas, sem erro).
+    if (!deletados || deletados.length === 0) {
+      console.error(`[DELETE tipo] RLS ou filtro impediu exclusão do tipo ${req.params.id}`);
+      return res.status(500).json({
+        success: false,
+        error: 'Não foi possível excluir o tipo do banco de dados. Verifique as permissões (RLS).',
+      });
+    }
 
     await registrarHistorico(
       sb,
