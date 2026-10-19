@@ -600,6 +600,25 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
+              {podeBaixar && anexados.length > 0 && (
+                <button
+                  onClick={handleBaixarTodos}
+                  disabled={baixandoTodos}
+                  title="Baixar todos os documentos"
+                  className="flex items-center gap-1.5 px-4 py-2.5 bg-white border border-[#DDE3E8] hover:border-[#176B87] text-[#176B87] text-xs font-semibold rounded-xl transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {baixandoTodos ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-[#176B87]/30 border-t-[#176B87] rounded-full animate-spin" />
+                      {baixandoProgresso}
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4" /> Baixar todos
+                    </>
+                  )}
+                </button>
+              )}
               <button
                 onClick={() => setShowListaCompleta(true)}
                 className="flex items-center gap-1.5 px-4 py-2.5 bg-white border border-[#DDE3E8] hover:border-[#7C3AED] text-[#4C1D95] text-xs font-semibold rounded-xl transition-colors cursor-pointer"
@@ -779,26 +798,6 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
                 title="Limpar filtro"
               >
                 {ESTILO_SITUACAO[filtroStatus].rotulo} <X className="w-3 h-3" />
-              </button>
-            )}
-            {podeBaixar && anexados.length > 0 && (
-              <button
-                onClick={handleBaixarTodos}
-                disabled={baixandoTodos}
-                title="Baixar todos os documentos"
-                className="flex items-center gap-1.5 px-3 py-2 text-[11px] font-semibold text-[#176B87] bg-[#EEF4F7] hover:bg-[#DCE9EE] border border-[#C8DDE4] rounded-xl transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {baixandoTodos ? (
-                  <>
-                    <div className="w-3.5 h-3.5 border-2 border-[#176B87]/30 border-t-[#176B87] rounded-full animate-spin" />
-                    {baixandoProgresso}
-                  </>
-                ) : (
-                  <>
-                    <Download className="w-3.5 h-3.5" />
-                    Baixar todos
-                  </>
-                )}
               </button>
             )}
             <div className="flex border border-[#DDE3E8] rounded-xl overflow-hidden">

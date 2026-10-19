@@ -124,6 +124,9 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({ selectedEmpresaI
       const tipoPorId = new Map(tipos.map(t => [t.id, t]));
       const normalizar = (v?: string) => String(v || '').trim().toUpperCase();
 
+      // IDs de tipos obrigatórios para TODOS (todos_colaboradores = true)
+      const idsParaTodos = tipos.filter(t => t.todos_colaboradores).map(t => t.id);
+
       const lista: ColaboradorComDocs[] = colaboradores.map((col) => {
         const r = resumo[col.id];
         const docs = r?.docs || [];
@@ -131,15 +134,19 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({ selectedEmpresaI
         const tiposPresentes = new Set(r?.tipos || []);
         const idsPresentes = new Set(r?.tipo_ids || []);
 
+        // Junta exigências da função + tipos obrigatórios para todos (sem duplicar)
+        const idsFuncao = exigencias[normalizar(col.funcao)] || [];
+        const todosIds = new Set([...idsFuncao, ...idsParaTodos]);
+
         return {
           colaborador: col,
           documentos: docs,
           totalDocs: r?.total || 0,
           vencidos: vencimentos.filter(v => situacaoDoDocumento(v) === 'vencido').length,
           aVencer: vencimentos.filter(v => situacaoDoDocumento(v) === 'a_vencer').length,
-          // Pendências saem da regra da FUNÇÃO do colaborador, não de uma lista fixa.
+          // Pendências: tipos da função + tipos obrigatórios para todos.
           // Tipo desativado não entra (só os ativos vêm em `tipos`).
-          pendentes: (exigencias[normalizar(col.funcao)] || [])
+          pendentes: Array.from(todosIds)
             .map(id => tipoPorId.get(id))
             .filter((t): t is DocumentoTipo => !!t)
             // Vínculo estável (tipo_id) primeiro; código/nome só para registros antigos
