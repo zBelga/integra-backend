@@ -450,12 +450,10 @@ router.get('/', exigirAlgumaTela(['documentacao.documentos', 'documentacao.tipos
 
     const sb = getSupabase();
 
-    // garantir_tipos_padrao recria tipos deletados — chamamos UMA VEZ por empresa, não toda listagem.
-    if (!empresasComTiposPadrao.has(empresa_id)) {
-      const { error: erroCatalogo } = await sb.rpc('garantir_tipos_padrao', { p_empresa_id: empresa_id });
-      if (erroCatalogo) console.warn('[Tipos] garantir_tipos_padrao falhou:', erroCatalogo.message);
-      empresasComTiposPadrao.add(empresa_id);
-    }
+    // garantir_tipos_padrao DESATIVADO — a RPC recriava tipos que o admin excluiu,
+    // pois ela faz INSERT dos tipos padrão quando não encontra. Tipos padrão já
+    // foram semeados na criação da empresa; novas empresas devem receber os tipos
+    // no fluxo de cadastro, não aqui.
 
     let q = sb.from('documento_tipos').select('*').eq('empresa_id', empresa_id);
     if (req.query.status && req.query.status !== 'all') q = q.eq('status', String(req.query.status));

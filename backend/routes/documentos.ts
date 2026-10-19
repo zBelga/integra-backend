@@ -231,12 +231,8 @@ router.get('/checklist/:colaboradorId', async (req: Request, res: Response) => {
 
     const empresa_id = colaborador.empresa_id;
 
-    // garantir_tipos_padrao recria tipos deletados — chamamos UMA VEZ por empresa, não toda listagem.
-    if (!empresasComTiposPadrao.has(empresa_id)) {
-      const { error: erroCatalogo } = await sb.rpc('garantir_tipos_padrao', { p_empresa_id: empresa_id });
-      if (erroCatalogo) console.warn('[Docs] garantir_tipos_padrao falhou:', erroCatalogo.message);
-      empresasComTiposPadrao.add(empresa_id);
-    }
+    // garantir_tipos_padrao DESATIVADO — a RPC recriava tipos que o admin excluiu.
+    // Tipos padrão já foram semeados na criação da empresa.
 
     const funcaoDoc = await funcaoDeDocumentos(sb, colaborador);
 
