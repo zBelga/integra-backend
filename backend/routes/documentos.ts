@@ -668,15 +668,19 @@ router.post('/upload', async (req: Request, res: Response) => {
     });
 
     // Se o documento é ASO e tem data de emissão, atualiza o data_aso do colaborador/admissão
-    // Verifica pelo código do tipo ou, se há tipo_id, pelo código cadastrado
-    let ehAso = normalizar(tipo) === 'ASO';
+    // Aceita "ASO", "ASO ADMISSIONAL", "ASO DEMISSIONAL", etc.
+    const checarAso = (codigo: string) => {
+      const n = normalizar(codigo);
+      return n === 'ASO' || n.startsWith('ASO ') || n.startsWith('ASO_') || n.startsWith('ASO-');
+    };
+    let ehAso = checarAso(tipo);
     if (!ehAso && tipo_id) {
       const { data: tipoInfo } = await supabase
         .from('documento_tipos')
         .select('codigo')
         .eq('id', tipo_id)
         .maybeSingle();
-      if (tipoInfo && normalizar(tipoInfo.codigo) === 'ASO') ehAso = true;
+      if (tipoInfo && checarAso(tipoInfo.codigo)) ehAso = true;
     }
     if (ehAso && data_emissao) {
       try {
