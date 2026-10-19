@@ -876,6 +876,16 @@ export async function downloadDocumento(
   return json;
 }
 
+/** Baixa todos os documentos de um colaborador como um ZIP. */
+export async function downloadTodosZip(colaboradorId: string): Promise<Blob> {
+  const res = await apiFetch(`/api/documentos/colaborador/${colaboradorId}/download-zip`);
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}));
+    throw new Error((json as any).error || 'Erro ao gerar ZIP');
+  }
+  return res.blob();
+}
+
 /** Exclusão reversível: o arquivo fica guardado e pode ser restaurado pelo histórico. */
 export async function deleteDocumento(id: string, motivo = ''): Promise<{ success: boolean }> {
   const res = await apiFetch(`/api/documentos/${id}`, {

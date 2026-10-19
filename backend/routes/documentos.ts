@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { queryRows } from '../db.js';
+import { ZipArchive } from 'archiver';
+import { queryRows, executeQuery } from '../db.js';
 import {
   pode,
   permissoesDocumentos,
@@ -666,6 +667,35 @@ router.post('/upload', async (req: Request, res: Response) => {
         : `${tipo} — "${nome}" (${nome_arquivo})`,
     });
 
+    // Se o documento é ASO e tem data de emissão, atualiza o data_aso do colaborador/admissão
+    // Verifica pelo código do tipo ou, se há tipo_id, pelo código cadastrado
+    let ehAso = normalizar(tipo) === 'ASO';
+    if (!ehAso && tipo_id) {
+      const { data: tipoInfo } = await supabase
+        .from('documento_tipos')
+        .select('codigo')
+        .eq('id', tipo_id)
+        .maybeSingle();
+      if (tipoInfo && normalizar(tipoInfo.codigo) === 'ASO') ehAso = true;
+    }
+    if (ehAso && data_emissao) {
+      try {
+        if (colaborador.id.startsWith('adm-')) {
+          await executeQuery(
+            `UPDATE admissoes SET data_aso = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+            [data_emissao, colaborador.id]
+          );
+        } else {
+          await executeQuery(
+            `UPDATE colaboradores SET data_aso = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+            [data_emissao, colaborador.id]
+          );
+        }
+      } catch {
+        /* best-effort: não impede o upload */
+      }
+    }
+
     res.json({ success: true, data });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -714,6 +744,89 @@ router.get('/:id/download', async (req: Request, res: Response) => {
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * GET /api/documentos/colaborador/:id/download-zip
+ * Baixa todos os documentos ativos do colaborador em um ZIP.
+ */
+router.get('/colaborador/:id/download-zip', async (req: Request, res: Response) => {
+  try {
+    if (!(await podeBaixar(req))) {
+      return res.status(403).json({ success: false, error: 'Sem permissão para baixar documentos.' });
+    }
+
+    const supabase = getSupabase();
+    const empresa_id = empresaDoPedido(req);
+    const colaboradorId = req.params.id;
+
+    const colaborador = await buscarColaborador(colaboradorId, empresa_id);
+    if (!colaborador || !mesmaEmpresa(req, colaborador.empresa_id)) {
+      return res.status(404).json({ success: false, error: 'Colaborador não encontrado.' });
+    }
+
+    // Busca todos os documentos ativos com arquivo
+    const { data: docs, error: docsErr } = await supabase
+      .from('documentos')
+      .select('id, storage_path, nome_arquivo, tipo')
+      .eq('colaborador_id', colaboradorId)
+      .eq('empresa_id', empresa_id)
+      .neq('status', 'excluido')
+      .not('storage_path', 'is', null);
+
+    if (docsErr) throw docsErr;
+    if (!docs || docs.length === 0) {
+      return res.status(404).json({ success: false, error: 'Nenhum documento para baixar.' });
+    }
+
+    // Nome da pasta: NOME_DO_COLABORADOR
+    const limpar = (t: string) =>
+      String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '').toUpperCase();
+    const nomeColab = limpar(colaborador.nome) || 'COLABORADOR';
+    const nomeZip = `${nomeColab}_DOCUMENTOS.zip`;
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${nomeZip}"`);
+
+    const archive = new ZipArchive({ zlib: { level: 5 } });
+    archive.pipe(res);
+
+    // Nomes já usados para evitar duplicatas
+    const nomesUsados = new Set<string>();
+
+    for (const doc of docs) {
+      try {
+        const { data, error } = await supabase.storage
+          .from('documentos')
+          .download(doc.storage_path);
+        if (error || !data) continue;
+
+        let nomeArquivo = nomeParaDownload(doc.tipo, colaborador.nome, doc.nome_arquivo);
+        // Evita nome duplicado
+        if (nomesUsados.has(nomeArquivo)) {
+          const ext = nomeArquivo.match(/\.([^.]+)$/)?.[1] || '';
+          const base = nomeArquivo.replace(/\.[^.]+$/, '');
+          let i = 2;
+          while (nomesUsados.has(`${base}_${i}.${ext}`)) i++;
+          nomeArquivo = `${base}_${i}.${ext}`;
+        }
+        nomesUsados.add(nomeArquivo);
+
+        const buffer = Buffer.from(await data.arrayBuffer());
+        archive.append(buffer, { name: nomeArquivo });
+      } catch {
+        // Pula arquivo com problema, não trava o ZIP inteiro
+      }
+    }
+
+    await archive.finalize();
+  } catch (err: any) {
+    // Se já começou a enviar o ZIP, não dá pra mandar JSON de erro
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, error: err.message });
+    }
   }
 });
 
