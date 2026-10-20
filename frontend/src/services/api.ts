@@ -865,6 +865,20 @@ export async function uploadDocumento(
   return json;
 }
 
+/** Envia documento para fila de aprovação (usuários com permissão "solicitar"). */
+export async function solicitarDocumento(
+  payload: UploadDocumentoPayload
+): Promise<{ success: boolean; solicitacao_id: string }> {
+  const res = await apiFetch('/api/documentos/solicitar', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Erro ao solicitar anexo do documento');
+  return json;
+}
+
 export async function downloadDocumento(
   id: string,
   paraBaixar = false

@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { ZipArchive } from 'archiver';
-import { queryRows, executeQuery } from '../db.js';
+import { queryRows, executeQuery, saveDbToDisk } from '../db.js';
 import {
   pode,
   permissoesDocumentos,
@@ -706,6 +706,169 @@ router.post('/upload', async (req: Request, res: Response) => {
     res.json({ success: true, data });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/documentos/solicitar — enviar documento para aprovação (sem anexar direto)
+router.post('/solicitar', async (req: Request, res: Response) => {
+  try {
+    const {
+      colaborador_id,
+      tipo,
+      nome,
+      nome_arquivo,
+      fileBase64,
+      mimeType,
+      data_emissao,
+      data_vencimento,
+      observacoes,
+      substitui_id,
+    } = req.body;
+
+    if (!colaborador_id || !tipo || !nome || !nome_arquivo || !fileBase64) {
+      return res.status(400).json({ success: false, error: 'Campos obrigatórios faltando.' });
+    }
+
+    // Permissão: precisa ter "solicitar" na tela de documentos
+    const perm = await permissoesDocumentos(req);
+    if (!perm.solicitar) {
+      return res.status(403).json({
+        success: false,
+        error: 'Seu cargo não possui permissão para solicitar anexo de documentos.',
+      });
+    }
+
+    const colaborador = await buscarColaborador(colaborador_id, empresaDoPedido(req));
+    if (!colaborador) return res.status(404).json({ success: false, error: 'Colaborador não encontrado.' });
+    if (!mesmaEmpresa(req, colaborador.empresa_id)) {
+      return res.status(403).json({ success: false, error: 'Colaborador de outra empresa.' });
+    }
+    const empresa_id: string = colaborador.empresa_id;
+
+    // Validação do arquivo (mesma do upload direto)
+    const MAX_BYTES = 10 * 1024 * 1024;
+    const buffer = Buffer.from(fileBase64, 'base64');
+    if (buffer.length === 0) {
+      return res.status(400).json({ success: false, error: 'Arquivo vazio.' });
+    }
+    if (buffer.length > MAX_BYTES) {
+      return res.status(413).json({
+        success: false,
+        error: `Arquivo muito grande (${(buffer.length / 1024 / 1024).toFixed(1)} MB). Máximo 10 MB.`,
+      });
+    }
+    if (!/\.(pdf|jpe?g|png|webp)$/i.test(String(nome_arquivo))) {
+      return res.status(400).json({ success: false, error: 'Formato não aceito. Use PDF, JPG, PNG ou WEBP.' });
+    }
+    if (data_emissao && data_vencimento && String(data_vencimento) < String(data_emissao)) {
+      return res.status(400).json({ success: false, error: 'A validade não pode ser anterior à emissão.' });
+    }
+
+    // Tipo precisa existir no catálogo DESTA empresa
+    let tipo_id: string | null = req.body.tipo_id || null;
+    if (tipo_id) {
+      const supabase = getSupabase();
+      const { data: t } = await supabase
+        .from('documento_tipos')
+        .select('id, tem_validade')
+        .eq('id', tipo_id)
+        .eq('empresa_id', empresa_id)
+        .maybeSingle();
+      if (!t) return res.status(400).json({ success: false, error: 'Tipo de documento inválido para esta empresa.' });
+      if (t.tem_validade && !data_vencimento) {
+        return res.status(400).json({ success: false, error: 'Este tipo de documento exige a data de validade.' });
+      }
+    }
+
+    // Faz upload para Supabase Storage numa pasta "pendentes/" para isolar
+    const supabase = getSupabase();
+    const ext = String(nome_arquivo).split('.').pop()?.toLowerCase() || 'bin';
+    const tempId = `pending-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    const storagePath = `pendentes/${empresa_id}/${colaborador.id}/${tempId}.${ext}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('documentos')
+      .upload(storagePath, buffer, {
+        contentType: mimeType || 'application/octet-stream',
+        upsert: false,
+      });
+
+    if (uploadError) throw uploadError;
+
+    // Criar a solicitação no banco via tabela solicitacoes_alteracao
+    const seqRows = await queryRows('SELECT MAX(codigo_sequencial) as maxSeq FROM solicitacoes_alteracao');
+    const nextSeq = (seqRows[0]?.maxSeq || 1024) + 1;
+    const newId = `sol-${nextSeq}`;
+
+    const dadosSolicitados = {
+      colaborador_id: colaborador.id,
+      colaborador_nome: colaborador.nome,
+      tipo,
+      tipo_id,
+      nome,
+      nome_arquivo,
+      storage_path: storagePath,
+      tamanho_bytes: buffer.length,
+      mime_type: mimeType || 'application/octet-stream',
+      data_emissao: data_emissao || '',
+      data_vencimento: data_vencimento || '',
+      observacoes: observacoes || '',
+      substitui_id: substitui_id || null,
+    };
+
+    const solicitanteNome = req.user?.nome || 'Usuário do Sistema';
+    const solicitanteCargo = req.user?.cargo || 'Assistente';
+    const solicitanteId = req.user?.id || 'usr-unknown';
+
+    await executeQuery(
+      `INSERT INTO solicitacoes_alteracao (
+        id, codigo_sequencial, empresa_id, modulo, registro_id, registro_identificador,
+        solicitante_id, solicitante_nome, solicitante_cargo, campo, valor_atual, valor_solicitado,
+        dados_anteriores, dados_solicitados, status, observacoes, data_solicitacao, updated_at
+      ) VALUES (?, ?, ?, 'documentos', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pendente', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      [
+        newId,
+        nextSeq,
+        empresa_id,
+        colaborador.id,
+        colaborador.nome || `Colaborador ${colaborador.id}`,
+        solicitanteId,
+        solicitanteNome,
+        solicitanteCargo,
+        `Anexar documento: ${tipo}`,
+        '',
+        nome,
+        '{}',
+        JSON.stringify(dadosSolicitados),
+        observacoes || '',
+      ]
+    );
+
+    // Registro de histórico da solicitação
+    const histId = `hist-${newId}-1`;
+    await executeQuery(
+      `INSERT INTO solicitacoes_historico (id, solicitacao_id, tipo_evento, usuario_id, usuario_nome, usuario_cargo, detalhes, created_at)
+       VALUES (?, ?, 'CRIADA', ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+      [
+        histId,
+        newId,
+        solicitanteId,
+        solicitanteNome,
+        solicitanteCargo,
+        `Solicitação #${nextSeq} — Anexar "${nome}" (${tipo}) ao colaborador ${colaborador.nome}`,
+      ]
+    );
+
+    await saveDbToDisk();
+
+    res.status(201).json({
+      success: true,
+      message: `Solicitação #${nextSeq} criada! O documento será anexado após aprovação.`,
+      data: { id: newId, codigo_sequencial: nextSeq },
+    });
+  } catch (err: any) {
+    console.error('Erro ao solicitar documento:', err);
+    res.status(500).json({ success: false, error: err.message || 'Erro ao registrar solicitação de documento.' });
   }
 });
 

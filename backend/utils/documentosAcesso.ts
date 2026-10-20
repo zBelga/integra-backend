@@ -25,6 +25,8 @@ export type AcaoDocumento = 'visualizar' | 'criar' | 'editar' | 'excluir';
 export interface PermissoesDocumentosTela extends Record<AcaoDocumento, boolean> {
   baixar: boolean;
   restaurar: boolean;
+  solicitar: boolean;
+  autorizar: boolean;
 }
 
 export function ehMaster(req: Request): boolean {
@@ -48,6 +50,8 @@ export async function permissoesDocumentos(req: Request): Promise<PermissoesDocu
     excluir: p.ver && p.excluir,
     baixar: p.ver && !!extras.baixar,
     restaurar: p.ver && !!extras.restaurar,
+    solicitar: p.ver && !!extras.solicitar,
+    autorizar: p.ver && !!extras.autorizar,
   };
 }
 

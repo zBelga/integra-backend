@@ -38,6 +38,7 @@ import {
   RefreshCw,
   Layers,
   ChevronLeft,
+  Send,
 } from 'lucide-react';
 import { UploadDocumentoModal } from './UploadDocumentoModal';
 import { AnexarLoteModal } from './AnexarLoteModal';
@@ -205,6 +206,7 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
   const [error, setError] = useState('');
 
   const [showUpload, setShowUpload] = useState(false);
+  const [uploadModo, setUploadModo] = useState<'anexar' | 'solicitar'>('anexar');
   const [uploadTipo, setUploadTipo] = useState<{ id: string; codigo: string; nome: string } | undefined>();
 
   const [busca, setBusca] = useState('');
@@ -270,7 +272,7 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
   const semExigencias = !isLoading && checklist.length === 0;
   // Enquanto não carrega, esconde ações de escrita (o servidor valida de novo)
   const perm: PermissoesDocumentos =
-    dados?.permissoes || { visualizar: true, criar: false, editar: false, excluir: false, baixar: false, restaurar: false };
+    dados?.permissoes || { visualizar: true, criar: false, editar: false, excluir: false, baixar: false, restaurar: false, solicitar: false, autorizar: false };
   const podeBaixar = !!perm.baixar;
 
   /** Alerta do tipo, por id — usado para calcular o status de cada anexo. */
@@ -340,11 +342,13 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
   }, [checklist, verTodosObrigatorios]);
 
   // ─── Ações ───
-  const abrirUpload = (item?: ChecklistItem) => {
+  const abrirUpload = (item?: ChecklistItem, forcarModo?: 'anexar' | 'solicitar') => {
     setUploadTipo(item ? { id: item.tipo_id, codigo: item.codigo, nome: item.nome } : undefined);
     // Item do checklist que já tem documento → é substituição
     const atual = item?.documento_id ? anexados.find(d => d.id === item.documento_id) : undefined;
     setSubstituindo(atual ? { id: atual.id, nome: atual.nome } : undefined);
+    // Quem não tem "criar" mas tem "solicitar" → abre em modo solicitação
+    setUploadModo(forcarModo || (perm.criar ? 'anexar' : perm.solicitar ? 'solicitar' : 'anexar'));
     setShowUpload(true);
   };
 
@@ -355,8 +359,8 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
     setShowUpload(true);
   };
 
-  /** Pode clicar no card do checklist? Anexar exige "criar"; substituir exige "editar". */
-  const podeAgirNoItem = (item: ChecklistItem) => (item.documento_id ? perm.editar : perm.criar);
+  /** Pode clicar no card do checklist? Anexar exige "criar" (ou "solicitar"); substituir exige "editar". */
+  const podeAgirNoItem = (item: ChecklistItem) => (item.documento_id ? perm.editar : (perm.criar || !!perm.solicitar));
 
   const comArquivo = async (doc: Documento, acao: 'ver' | 'baixar') => {
     setOcupadoId(doc.id);
@@ -617,14 +621,21 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
               >
                 <List className="w-4 h-4" /> Ver lista completa
               </button>
-              {perm.criar && (
+              {perm.criar ? (
                 <button
                   onClick={() => setShowLote(true)}
                   className="flex items-center gap-1.5 px-4 py-2.5 bg-[#5B21E6] hover:bg-[#4C1BC4] text-white text-xs font-semibold rounded-xl transition-colors cursor-pointer shadow-[0_2px_6px_rgba(91,33,230,0.25)]"
                 >
                   <Upload className="w-4 h-4" /> Anexar em lote
                 </button>
-              )}
+              ) : perm.solicitar ? (
+                <button
+                  onClick={() => abrirUpload(undefined, 'solicitar')}
+                  className="flex items-center gap-1.5 px-4 py-2.5 bg-[#B8860B] hover:bg-[#996F09] text-white text-xs font-semibold rounded-xl transition-colors cursor-pointer shadow-[0_2px_6px_rgba(184,134,11,0.25)]"
+                >
+                  <Send className="w-4 h-4" /> Solicitar anexo
+                </button>
+              ) : null}
             </div>
           </div>
 
@@ -827,12 +838,15 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
                 ? 'Clique no botão abaixo ou selecione um documento acima para começar.'
                 : 'Ajuste a busca ou os filtros para ver outros documentos.'}
             </p>
-            {anexados.length === 0 && perm.criar && (
+            {anexados.length === 0 && (perm.criar || perm.solicitar) && (
               <button
                 onClick={() => abrirUpload()}
-                className="mt-5 inline-flex items-center gap-2 px-6 py-3 bg-[#176B87] hover:bg-[#135a73] text-white text-sm font-semibold rounded-xl transition-colors cursor-pointer"
+                className={`mt-5 inline-flex items-center gap-2 px-6 py-3 text-white text-sm font-semibold rounded-xl transition-colors cursor-pointer ${
+                  perm.criar ? 'bg-[#176B87] hover:bg-[#135a73]' : 'bg-[#B8860B] hover:bg-[#996F09]'
+                }`}
               >
-                <Upload className="w-4 h-4" /> Anexar Documento
+                {perm.criar ? <Upload className="w-4 h-4" /> : <Send className="w-4 h-4" />}
+                {perm.criar ? 'Anexar Documento' : 'Solicitar Anexo'}
               </button>
             )}
           </div>
@@ -963,7 +977,8 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
           catalogo={catalogo}
           tipoPreSelecionado={uploadTipo}
           substituindo={substituindo}
-          onClose={() => { setShowUpload(false); setUploadTipo(undefined); setSubstituindo(undefined); }}
+          modo={uploadModo}
+          onClose={() => { setShowUpload(false); setUploadTipo(undefined); setSubstituindo(undefined); setUploadModo('anexar'); }}
           onSuccess={carregar}
         />
       )}

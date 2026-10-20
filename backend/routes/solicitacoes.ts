@@ -1,8 +1,22 @@
 import { Router, Request, Response } from 'express';
+import { createClient } from '@supabase/supabase-js';
 import { queryRows, executeQuery, saveDbToDisk } from '../db.js';
-import { pode, ehMaster, Modulo, Acao, exigirTela } from '../utils/permissoes.js';
+import { pode, ehMaster, Modulo, Acao, exigirTela, podeExtra } from '../utils/permissoes.js';
 
 const router = Router();
+
+/** Supabase client para operações de documentos nas aprovações. */
+let _sb: any = null;
+function getSupabase() {
+  if (_sb) return _sb;
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('Supabase não configurado no .env');
+  _sb = createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  return _sb;
+}
 
 /**
  * Permissão do usuário LOGADO no módulo da solicitação. O cargo vem do token,
@@ -11,6 +25,13 @@ const router = Router();
  */
 async function podeNoModuloDaSolicitacao(req: Request, modulo: string, acao: Acao): Promise<boolean> {
   if (ehMaster(req)) return true;
+
+  // Documentos usa permissões específicas: "solicitar" e "autorizar" na tela documentacao.documentos
+  if (String(modulo) === 'documentos') {
+    if (acao === 'solicitar') return await podeExtra(req, 'documentacao.documentos', 'solicitar');
+    if (acao === 'aprovar') return await podeExtra(req, 'documentacao.documentos', 'autorizar');
+  }
+
   const conhecidos = ['admissoes', 'efetivo', 'obras', 'documentos', 'rh', 'relatorios', 'usuarios'];
   const alvo = (conhecidos.includes(String(modulo)) ? String(modulo) : 'admissoes') as Modulo;
   return pode(req, alvo, acao);
@@ -396,6 +417,76 @@ router.post('/:id/aprovar', async (req: Request, res: Response) => {
           [updatedNome, updatedCodigo, sol.registro_id]
         );
       }
+    } else if (sol.modulo === 'documentos') {
+      // Aprovação de documento: mover o arquivo de pendentes/ para o caminho final
+      // e criar o registro na tabela "documentos" do Supabase
+      const supabase = getSupabase();
+      const dp = dadosPayload;
+
+      if (dp.storage_path && dp.colaborador_id) {
+        const docId = `doc-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+        const ext = String(dp.nome_arquivo || '').split('.').pop()?.toLowerCase() || 'bin';
+        const finalPath = `${sol.empresa_id}/${dp.colaborador_id}/${docId}.${ext}`;
+
+        // Mover arquivo de pendentes/ para o caminho definitivo
+        const { error: moveErr } = await supabase.storage
+          .from('documentos')
+          .move(dp.storage_path, finalPath);
+
+        if (moveErr) {
+          console.error('Erro ao mover arquivo pendente:', moveErr);
+          // Se o move falha, tenta copiar o objeto (fallback)
+          const { data: fileData } = await supabase.storage.from('documentos').download(dp.storage_path);
+          if (fileData) {
+            const arrayBuf = await fileData.arrayBuffer();
+            await supabase.storage.from('documentos').upload(finalPath, Buffer.from(arrayBuf), {
+              contentType: dp.mime_type || 'application/octet-stream',
+              upsert: false,
+            });
+            // Apaga o pendente
+            await supabase.storage.from('documentos').remove([dp.storage_path]);
+          }
+        }
+
+        // Se está substituindo outro documento, marca o anterior como substituído
+        if (dp.substitui_id) {
+          await supabase
+            .from('documentos')
+            .update({
+              status: 'substituido',
+              substituido_por: docId,
+              substituido_em: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', dp.substitui_id)
+            .eq('status', 'ativo');
+        }
+
+        // Criar o registro do documento
+        const { error: dbErr } = await supabase.from('documentos').insert({
+          id: docId,
+          colaborador_id: dp.colaborador_id,
+          empresa_id: sol.empresa_id,
+          tipo: dp.tipo,
+          tipo_id: dp.tipo_id || null,
+          nome: dp.nome,
+          nome_arquivo: dp.nome_arquivo,
+          storage_path: finalPath,
+          tamanho_bytes: dp.tamanho_bytes || 0,
+          data_emissao: dp.data_emissao || '',
+          data_vencimento: dp.data_vencimento || '',
+          observacoes: dp.observacoes || '',
+          status: 'ativo',
+          uploaded_by: sol.solicitante_nome || '',
+        });
+
+        if (dbErr) {
+          console.error('Erro ao criar documento após aprovação:', dbErr);
+          // Tenta apagar o arquivo movido se o insert falhou
+          await supabase.storage.from('documentos').remove([finalPath]);
+          throw new Error('Erro ao criar o registro do documento aprovado.');
+        }
+      }
     }
 
     // Mark request as approved
@@ -496,6 +587,17 @@ router.post('/:id/recusar', async (req: Request, res: Response) => {
           error: 'Seu cargo não possui permissão para aprovar ou recusar solicitações deste módulo.',
         });
       }
+    }
+
+    // Se é documento, limpar o arquivo pendente do storage
+    if (sol.modulo === 'documentos') {
+      try {
+        const dados = sol.dados_solicitados ? JSON.parse(sol.dados_solicitados) : {};
+        if (dados.storage_path) {
+          const supabase = getSupabase();
+          await supabase.storage.from('documentos').remove([dados.storage_path]);
+        }
+      } catch { /* best-effort: não impede a recusa */ }
     }
 
     // Mark as rejected - Do NOT touch the original data!

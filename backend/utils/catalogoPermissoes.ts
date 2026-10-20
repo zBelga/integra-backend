@@ -89,6 +89,8 @@ export const CATALOGO: ModuloInfo[] = [
         extras: [
           { id: 'baixar', nome: 'Baixar arquivo', descricao: 'Abrir e baixar o arquivo anexado' },
           { id: 'restaurar', nome: 'Restaurar excluído', descricao: 'Trazer de volta um documento excluído' },
+          { id: 'solicitar', nome: 'Solicitar anexo', descricao: 'Enviar documento para aprovação antes de anexar' },
+          { id: 'autorizar', nome: 'Autorizar documento', descricao: 'Aprovar ou recusar documentos enviados para revisão' },
         ],
       },
       {

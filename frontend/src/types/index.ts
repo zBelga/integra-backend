@@ -385,6 +385,8 @@ export interface PermissoesDocumentos {
   /** Ações especiais da tela (catálogo de permissões) */
   baixar?: boolean;
   restaurar?: boolean;
+  solicitar?: boolean;
+  autorizar?: boolean;
 }
 
 export interface EventoHistorico {

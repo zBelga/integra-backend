@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Upload, FileText, AlertCircle, Check, Sparkles } from 'lucide-react';
-import { uploadDocumento } from '../../services/api';
+import { X, Upload, FileText, AlertCircle, Check, Sparkles, Send } from 'lucide-react';
+import { uploadDocumento, solicitarDocumento } from '../../services/api';
 import { addMeses } from '../../constants/documentosUI';
 
 /** Um tipo do catálogo da empresa (vem do banco, não de uma lista fixa). */
@@ -23,6 +23,8 @@ interface UploadDocumentoModalProps {
   tipoPreSelecionado?: { id: string; codigo: string; nome: string };
   /** Substituição: o documento atual vai para o histórico e este passa a valer */
   substituindo?: { id: string; nome: string };
+  /** 'anexar' = upload direto (padrão); 'solicitar' = envia para aprovação */
+  modo?: 'anexar' | 'solicitar';
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -35,9 +37,11 @@ export const UploadDocumentoModal: React.FC<UploadDocumentoModalProps> = ({
   catalogo,
   tipoPreSelecionado,
   substituindo,
+  modo = 'anexar',
   onClose,
   onSuccess,
 }) => {
+  const ehSolicitacao = modo === 'solicitar';
   const [tipoId, setTipoId] = useState(tipoPreSelecionado?.id || '');
   const [nome, setNome] = useState('');
   const [dataEmissao, setDataEmissao] = useState('');
@@ -143,7 +147,7 @@ export const UploadDocumentoModal: React.FC<UploadDocumentoModalProps> = ({
 
       setProgresso(60);
 
-      await uploadDocumento({
+      const payload = {
         colaborador_id: colaboradorId,
         empresa_id: empresaId,
         tipo: tipoCfg.codigo,
@@ -156,7 +160,13 @@ export const UploadDocumentoModal: React.FC<UploadDocumentoModalProps> = ({
         data_emissao: dataEmissao,
         data_vencimento: dataVencimento,
         observacoes,
-      });
+      };
+
+      if (ehSolicitacao) {
+        await solicitarDocumento(payload);
+      } else {
+        await uploadDocumento(payload);
+      }
 
       setProgresso(100);
       onSuccess();
@@ -175,12 +185,12 @@ export const UploadDocumentoModal: React.FC<UploadDocumentoModalProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#DDE3E8] shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-[#E8F3F6] rounded-lg flex items-center justify-center">
-              <Upload className="w-4 h-4 text-[#176B87]" />
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${ehSolicitacao ? 'bg-[#FEF3E0]' : 'bg-[#E8F3F6]'}`}>
+              {ehSolicitacao ? <Send className="w-4 h-4 text-[#B8860B]" /> : <Upload className="w-4 h-4 text-[#176B87]" />}
             </div>
             <div>
               <h2 className="text-sm font-bold text-[#17212B]">
-                {substituindo ? 'Substituir documento' : 'Anexar Documento'}
+                {ehSolicitacao ? 'Solicitar Anexo' : substituindo ? 'Substituir documento' : 'Anexar Documento'}
               </h2>
               <p className="text-xs text-[#687582]">PDF, JPG, PNG ou WEBP · máx. {MAX_MB} MB</p>
             </div>
@@ -195,6 +205,13 @@ export const UploadDocumentoModal: React.FC<UploadDocumentoModalProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4 overflow-y-auto">
+          {ehSolicitacao && (
+            <div className="rounded-lg border border-[#C4B5FD] bg-[#F5F3FF] px-3 py-2 text-[11px] text-[#5B21B6] leading-snug flex items-start gap-2">
+              <Send className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              <span>O documento será enviado para <strong>aprovação</strong>. Ele só aparecerá no checklist após um responsável autorizar.</span>
+            </div>
+          )}
+
           {substituindo && (
             <div className="rounded-lg border border-[#F8D99B] bg-[#FEF3E0] px-3 py-2 text-[11px] text-[#7A4C06] leading-snug">
               O documento atual <strong>"{substituindo.nome}"</strong> sai da lista, mas continua guardado
@@ -364,8 +381,8 @@ export const UploadDocumentoModal: React.FC<UploadDocumentoModalProps> = ({
                 </>
               ) : (
                 <>
-                  <Upload className="w-3.5 h-3.5" />
-                  {substituindo ? 'Substituir' : 'Anexar Documento'}
+                  {ehSolicitacao ? <Send className="w-3.5 h-3.5" /> : <Upload className="w-3.5 h-3.5" />}
+                  {ehSolicitacao ? 'Solicitar aprovação' : substituindo ? 'Substituir' : 'Anexar Documento'}
                 </>
               )}
             </button>
