@@ -15,10 +15,11 @@ import type { PermissoesUsuario } from '../../types';
 import { podeNaTela } from '../../utils/permissoes';
 import { FichaEpiView } from './FichaEpiView';
 import { KitsEpiView } from './KitsEpiView';
+import { RelatorioAtividadesView } from './RelatorioAtividadesView';
 
 const TELA = 'seguranca.epis';
 
-type Dentro = 'modelos' | 'ficha-epi' | 'kits';
+type Dentro = 'modelos' | 'ficha-epi' | 'kits' | 'relatorio-atividades';
 
 interface Modelo {
   id: Dentro;
@@ -34,6 +35,13 @@ const MODELOS: Modelo[] = [
     nome: 'Ficha de Entrega de EPI',
     codigo: 'FO-RH-05-V2',
     descricao: 'Puxa os dados do Efetivo, sugere o kit da função e sai em PDF para assinar.',
+    pronto: true,
+  },
+  {
+    id: 'relatorio-atividades',
+    nome: 'Relatório de Atividades',
+    codigo: '001/2026',
+    descricao: 'Preenche nome, CPF, função e data do executor a partir do Efetivo e gera o PDF.',
     pronto: true,
   },
 ];
@@ -76,6 +84,15 @@ export const SegurancaView: React.FC<Props> = ({ permissoes, onVoltar }) => {
         permissoes={permissoes}
         onVoltar={() => setDentro('modelos')}
         onAbrirKits={() => setDentro('kits')}
+      />
+    );
+  }
+
+  if (dentro === 'relatorio-atividades') {
+    return (
+      <RelatorioAtividadesView
+        permissoes={permissoes}
+        onVoltar={() => setDentro('modelos')}
       />
     );
   }
