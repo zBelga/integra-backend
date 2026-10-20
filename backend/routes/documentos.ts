@@ -241,7 +241,7 @@ router.get('/checklist/:colaboradorId', async (req: Request, res: Response) => {
     const funcaoDoc = await funcaoDeDocumentos(sb, colaborador);
 
     const statusColab = colaborador.status || 'ativo';
-    const temMudancaFuncao = !!colaborador.data_mudanca_funcao;
+    const temMudancaFuncao = !!(colaborador.data_mudanca_funcao || colaborador.funcao_anterior);
     const [{ todosOsTipos, tiposExigidos }, { data: docs, error }] = await Promise.all([
       exigenciasDaFuncao(sb, empresa_id, funcaoDoc.funcao, statusColab, temMudancaFuncao),
       sb
