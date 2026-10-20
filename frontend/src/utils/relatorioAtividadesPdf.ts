@@ -5,7 +5,8 @@
  * Campos dinâmicos: nome, CPF, função, registro, projeto, data.
  * O restante (horários, resumo de atividades) é o texto padrão do modelo.
  */
-import { LOGO_MW_JPEG } from './logoMw';
+import { LOGO_MW_RELATORIO_JPEG } from './logoMwRelatorio';
+import { LOGO_ISO_JPEG } from './logoIso';
 
 export interface DadosRelatorioAtividades {
   nome: string;
@@ -87,19 +88,25 @@ export async function gerarRelatorioAtividadesPdf(dados: DadosRelatorioAtividade
 
   let y = 15;
 
-  /* ── Logo + Título ── */
+  /* ── Logos + Título ── */
+  // MW logo à esquerda
   try {
-    doc.addImage(LOGO_MW_JPEG, 'JPEG', MARGEM, y, 28, 16);
+    doc.addImage(LOGO_MW_RELATORIO_JPEG, 'JPEG', MARGEM, y, 30, 24);
+  } catch { /* sem logo continua */ }
+
+  // ISO logo à direita
+  try {
+    doc.addImage(LOGO_ISO_JPEG, 'JPEG', MARGEM + LARGURA_UTIL - 28, y, 28, 28);
   } catch { /* sem logo continua */ }
 
   doc.setFont(FONTE, 'bold');
   doc.setFontSize(10);
-  texto(doc, 'RELATÓRIO DE ATIVIDADES', MARGEM + LARGURA_UTIL / 2, y + 22, { align: 'center' });
+  texto(doc, 'RELATÓRIO DE ATIVIDADES', MARGEM + LARGURA_UTIL / 2, y + 18, { align: 'center' });
 
   doc.setFontSize(10);
-  texto(doc, '001/2026', MARGEM + LARGURA_UTIL / 2, y + 28, { align: 'center' });
+  texto(doc, '001/2026', MARGEM + LARGURA_UTIL / 2, y + 24, { align: 'center' });
 
-  y += 36;
+  y += 34;
 
   /* ── Bloco Executor ── */
   const linhaH = 6;
