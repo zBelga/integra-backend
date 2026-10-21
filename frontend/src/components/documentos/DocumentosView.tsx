@@ -55,9 +55,13 @@ interface DocumentosViewProps {
   selectedEmpresaId?: string;
   /** Abre Configurações → Documentos por Função */
   onConfigurarExigencias?: () => void;
+  /** Se informado, abre automaticamente o perfil deste colaborador ao carregar a lista. */
+  initialColaboradorId?: string | null;
+  /** Chamado depois que o colaborador inicial foi aberto (para limpar o estado no pai). */
+  onColaboradorAberto?: () => void;
 }
 
-export const DocumentosView: React.FC<DocumentosViewProps> = ({ selectedEmpresaId, onConfigurarExigencias }) => {
+export const DocumentosView: React.FC<DocumentosViewProps> = ({ selectedEmpresaId, onConfigurarExigencias, initialColaboradorId, onColaboradorAberto }) => {
   const [aba, setAba] = useState<'ativo' | 'desligado' | 'contratado'>('ativo');
   const [lista, setLista] = useState<ColaboradorComDocs[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -166,6 +170,16 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({ selectedEmpresaI
   }, [aba]);
 
   useEffect(() => { loadDados(); }, [loadDados]);
+
+  // Abre automaticamente o colaborador vindo de outra tela (ex: Contratados do Dia → Documentos)
+  useEffect(() => {
+    if (!initialColaboradorId || isLoading || lista.length === 0) return;
+    const encontrado = lista.find(item => item.colaborador.id === initialColaboradorId);
+    if (encontrado) {
+      setSelectedColaborador(encontrado.colaborador);
+      onColaboradorAberto?.();
+    }
+  }, [initialColaboradorId, isLoading, lista, onColaboradorAberto]);
 
   // Resetar filtro ao trocar de aba
   const trocarAba = (novaAba: 'ativo' | 'desligado' | 'contratado') => {

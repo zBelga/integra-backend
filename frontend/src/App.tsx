@@ -134,6 +134,8 @@ export default function App() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
+  /** Quando veio de "Ver documentos" em Contratados, abre direto no perfil do colaborador. */
+  const [pendingColaboradorId, setPendingColaboradorId] = useState<string | null>(null);
   /**
    * Primeiro acesso: a senha ainda é a que o administrador cadastrou.
    * Vem da resposta do login (é a fonte da verdade) e qualquer rota que
@@ -376,7 +378,7 @@ export default function App() {
             />
           )}
           {currentView === 'administrativo' && (
-            <AdministrativoView onShowToast={setToast} selectedEmpresa={selectedEmpresa} permissoes={permissoes} />
+            <AdministrativoView onShowToast={setToast} selectedEmpresa={selectedEmpresa} permissoes={permissoes} onNavigate={setCurrentView} onAbrirDocumentos={(colabId) => { setPendingColaboradorId(colabId); setCurrentView('documentos'); }} />
           )}
           {(currentView === 'efetivo-obra' || currentView === 'almoxarifado') && (
             <EmBreve
@@ -403,6 +405,8 @@ export default function App() {
             <DocumentosView
               selectedEmpresaId={selectedEmpresa?.id}
               onConfigurarExigencias={() => setCurrentView('documentos-funcao')}
+              initialColaboradorId={pendingColaboradorId}
+              onColaboradorAberto={() => setPendingColaboradorId(null)}
             />
           )}
           {currentView === 'documento-tipos' && <TiposDocumentoView />}

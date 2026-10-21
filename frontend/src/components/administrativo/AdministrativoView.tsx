@@ -20,14 +20,17 @@ interface AdministrativoViewProps {
   onShowToast: (toast: ToastMessage) => void;
   selectedEmpresa?: Empresa | null;
   onNavigate?: (view: ActiveView) => void;
+  /** Navega direto para os documentos de um colaborador (por id). */
+  onAbrirDocumentos?: (colaboradorId: string) => void;
   /** Permissões do cargo — decidem quais botões aparecem */
   permissoes?: import('../../types').PermissoesUsuario | null;
 }
 
-export const AdministrativoView: React.FC<AdministrativoViewProps> = ({ 
+export const AdministrativoView: React.FC<AdministrativoViewProps> = ({
   onShowToast,
   selectedEmpresa,
   onNavigate,
+  onAbrirDocumentos,
   permissoes,
 }) => {
   const companyColor = selectedEmpresa?.corPrimaria || '#176B87';
@@ -45,6 +48,7 @@ export const AdministrativoView: React.FC<AdministrativoViewProps> = ({
   const podeGerenciarObras =
     podeNaTela(permissoes, 'administrativo.obras', 'criar') ||
     podeNaTela(permissoes, 'administrativo.obras', 'editar');
+  const podeVerDocumentos = podeNaTela(permissoes, 'documentacao.documentos', 'ver');
 
   // Active simulated role inside the module
   const [activeRole, setActiveRole] = useState<'encarregado' | 'assistente' | 'master'>('encarregado');
@@ -523,6 +527,7 @@ export const AdministrativoView: React.FC<AdministrativoViewProps> = ({
             data={abaAtiva}
             corEmpresa={companyColor}
             onVerNoEfetivo={onNavigate ? () => onNavigate('efetivo') : undefined}
+            onVerDocumentos={podeVerDocumentos && onAbrirDocumentos ? onAbrirDocumentos : undefined}
           />
         ) : (
         <>
