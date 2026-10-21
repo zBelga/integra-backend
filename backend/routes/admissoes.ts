@@ -490,8 +490,10 @@ router.post('/:id/contratar', exigirExtra('administrativo.admissoes', 'contratar
     }
 
     const adm = admRows[0];
-    // O colaborador nasce na empresa da própria admissão (nunca num padrão fixo)
-    const empresaId = adm.empresa_id || req.user?.empresa_id || '';
+    // O colaborador nasce na empresa da própria admissão.
+    // Se a admissão não tiver empresa_id, usa empresaDoPedido (que para master
+    // lê empresa_id da query/body, evitando cair no 'emp-001' do token).
+    const empresaId = adm.empresa_id || empresaDoPedido(req) || '';
     if (!empresaId) {
       return res.status(400).json({ success: false, error: 'Admissão sem empresa definida.' });
     }
