@@ -155,6 +155,47 @@ router.get('/', exigirTela('aprovacoes.solicitacoes', 'ver'), async (req: Reques
   }
 });
 
+// GET /api/solicitacoes/:id/preview — URL assinada para visualizar o anexo pendente
+router.get('/:id/preview', exigirTela('aprovacoes.solicitacoes', 'ver'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const rows = await queryRows('SELECT * FROM solicitacoes_alteracao WHERE id = ?', [id]);
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Solicitação não encontrada.' });
+    }
+
+    const sol = rows[0];
+    if (sol.modulo !== 'documentos') {
+      return res.status(400).json({ success: false, error: 'Esta solicitação não é de documento.' });
+    }
+
+    let dados: any = {};
+    try { dados = JSON.parse(sol.dados_solicitados || '{}'); } catch {}
+
+    if (!dados.storage_path) {
+      return res.status(404).json({ success: false, error: 'Arquivo pendente não encontrado.' });
+    }
+
+    const supabase = getSupabase();
+    const { data, error } = await supabase.storage
+      .from('documentos')
+      .createSignedUrl(dados.storage_path, 300); // 5 min
+
+    if (error) throw error;
+
+    res.json({
+      success: true,
+      url: data.signedUrl,
+      nome_arquivo: dados.nome_arquivo || '',
+      mime_type: dados.mime_type || '',
+      tamanho_bytes: dados.tamanho_bytes || 0,
+    });
+  } catch (err: any) {
+    console.error('Erro ao gerar preview de solicitação:', err);
+    res.status(500).json({ success: false, error: err.message || 'Erro ao gerar URL de preview.' });
+  }
+});
+
 // GET /api/solicitacoes/:id - Single request details with audit timeline
 router.get('/:id', exigirTela('aprovacoes.solicitacoes', 'ver'), async (req: Request, res: Response) => {
   try {

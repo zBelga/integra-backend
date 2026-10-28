@@ -549,6 +549,13 @@ export async function fetchSolicitacaoById(id: string): Promise<{ success: boole
   return json;
 }
 
+export async function fetchSolicitacaoPreview(id: string): Promise<{ success: boolean; url: string; nome_arquivo: string; mime_type: string; tamanho_bytes: number }> {
+  const res = await apiFetch(`/api/solicitacoes/${id}/preview`);
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Erro ao carregar preview');
+  return json;
+}
+
 export async function createSolicitacao(payload: {
   empresa_id: string;
   modulo: string;
