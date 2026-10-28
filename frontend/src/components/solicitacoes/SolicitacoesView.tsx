@@ -35,6 +35,7 @@ import {
 import { ToastMessage } from '../ui/Toast';
 import { SolicitacaoDetalhesModal } from './SolicitacaoDetalhesModal';
 import { RecusarModal } from './RecusarModal';
+import { AprovacaoDetalhe } from './AprovacaoDetalhe';
 
 interface SolicitacoesViewProps {
   selectedEmpresa: Empresa | null;
@@ -176,6 +177,9 @@ export const SolicitacoesView: React.FC<SolicitacoesViewProps> = ({
   const [moduloFilter, setModuloFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Detail view state (full-page detail replaces the list)
+  const [detalheId, setDetalheId] = useState<string | null>(null);
+
   // Modals state
   const [selectedForDetails, setSelectedForDetails] = useState<string | null>(null);
   const [selectedForRecusa, setSelectedForRecusa] = useState<SolicitacaoAlteracao | null>(null);
@@ -275,6 +279,19 @@ export const SolicitacoesView: React.FC<SolicitacoesViewProps> = ({
       });
     }
   };
+
+  // ── Detail view (full-page) ──
+  if (detalheId) {
+    return (
+      <AprovacaoDetalhe
+        solicitacaoId={detalheId}
+        onVoltar={() => { setDetalheId(null); loadData(); }}
+        onShowToast={onShowToast}
+        currentUser={currentUser}
+        companyColor={companyColor}
+      />
+    );
+  }
 
   return (
     <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
@@ -437,7 +454,8 @@ export const SolicitacoesView: React.FC<SolicitacoesViewProps> = ({
               return (
                 <div
                   key={sol.id}
-                  className="bg-white rounded-2xl border border-[#DDE3E8] shadow-xs hover:shadow-sm transition-all overflow-hidden"
+                  className="bg-white rounded-2xl border border-[#DDE3E8] shadow-xs hover:shadow-sm transition-all overflow-hidden cursor-pointer group/card"
+                  onClick={() => setDetalheId(sol.id)}
                 >
                   {/* Status bar no topo */}
                   <div className={`px-5 py-2.5 flex items-center justify-between ${
@@ -566,14 +584,23 @@ export const SolicitacoesView: React.FC<SolicitacoesViewProps> = ({
                         )}
 
                         {/* Ações */}
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <button
-                            onClick={() => setSelectedForDetails(sol.id)}
-                            className="inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold text-[#687582] hover:text-[#17212B] hover:bg-[#F4F6F8] rounded-lg transition-colors cursor-pointer"
-                          >
-                            <History className="w-3.5 h-3.5" />
-                            <span>Auditoria</span>
-                          </button>
+                        <div className="flex flex-wrap items-center justify-between gap-3" onClick={e => e.stopPropagation()}>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => setDetalheId(sol.id)}
+                              className="inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold text-[#176B87] hover:text-[#17212B] hover:bg-[#E8F3F6] rounded-lg transition-colors cursor-pointer"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>Ver detalhes</span>
+                            </button>
+                            <button
+                              onClick={() => setSelectedForDetails(sol.id)}
+                              className="inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold text-[#687582] hover:text-[#17212B] hover:bg-[#F4F6F8] rounded-lg transition-colors cursor-pointer"
+                            >
+                              <History className="w-3.5 h-3.5" />
+                              <span>Auditoria</span>
+                            </button>
+                          </div>
 
                           {isPendente && (
                             <div className="flex items-center space-x-2">
@@ -606,7 +633,8 @@ export const SolicitacoesView: React.FC<SolicitacoesViewProps> = ({
             return (
               <div
                 key={sol.id}
-                className="bg-white rounded-2xl border border-[#DDE3E8] p-5 shadow-xs hover:shadow-sm transition-all space-y-4"
+                className="bg-white rounded-2xl border border-[#DDE3E8] p-5 shadow-xs hover:shadow-sm transition-all space-y-4 cursor-pointer"
+                onClick={() => setDetalheId(sol.id)}
               >
                 {/* Top Info Bar */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#EBF0F3]">
@@ -706,7 +734,7 @@ export const SolicitacoesView: React.FC<SolicitacoesViewProps> = ({
                 )}
 
                 {/* Bottom Actions */}
-                <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-1" onClick={e => e.stopPropagation()}>
                   <button
                     onClick={() => setSelectedForDetails(sol.id)}
                     className="inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold text-[#687582] hover:text-[#17212B] hover:bg-[#F4F6F8] rounded-lg transition-colors cursor-pointer"

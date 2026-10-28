@@ -75,6 +75,7 @@ export interface EstiloSituacao {
 /** Paleta de status — mesma linguagem visual em todas as telas. */
 export const ESTILO_SITUACAO: Record<SituacaoDocumento, EstiloSituacao> = {
   pendente:     { rotulo: 'Pendente',      texto: '#B4341F', fundo: '#FDECE8', borda: '#F7C9BD', ponto: '#E0603F' },
+  em_analise:   { rotulo: 'Em análise',    texto: '#A9690A', fundo: '#FEF3C7', borda: '#FDE68A', ponto: '#D97706' },
   valido:       { rotulo: 'Válido',        texto: '#0F7A5A', fundo: '#E8F6F1', borda: '#B8E8D9', ponto: '#159A72' },
   sem_validade: { rotulo: 'Válido',        texto: '#0F7A5A', fundo: '#E8F6F1', borda: '#B8E8D9', ponto: '#159A72' },
   a_vencer:     { rotulo: 'A vencer',      texto: '#A9690A', fundo: '#FEF3E0', borda: '#F8D99B', ponto: '#D4890A' },

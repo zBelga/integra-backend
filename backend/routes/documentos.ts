@@ -242,7 +242,7 @@ router.get('/checklist/:colaboradorId', async (req: Request, res: Response) => {
 
     const statusColab = colaborador.status || 'ativo';
     const temMudancaFuncao = !!(colaborador.data_mudanca_funcao || colaborador.funcao_anterior);
-    const [{ todosOsTipos, tiposExigidos }, { data: docs, error }] = await Promise.all([
+    const [{ todosOsTipos, tiposExigidos }, { data: docs, error }, solicitacoesPendentes] = await Promise.all([
       exigenciasDaFuncao(sb, empresa_id, funcaoDoc.funcao, statusColab, temMudancaFuncao),
       sb
         .from('documentos')
@@ -250,6 +250,13 @@ router.get('/checklist/:colaboradorId', async (req: Request, res: Response) => {
         .eq('colaborador_id', colaborador.id)
         .eq('status', 'ativo')
         .order('created_at', { ascending: false }),
+      // Buscar solicitações pendentes de documento para este colaborador
+      queryRows(
+        `SELECT id, campo, dados_solicitados FROM solicitacoes_alteracao
+         WHERE modulo = 'documentos' AND status = 'pendente'
+           AND registro_id = ? AND empresa_id = ?`,
+        [colaborador.id, empresa_id]
+      ),
     ]);
 
     if (error) throw error;
@@ -267,14 +274,25 @@ router.get('/checklist/:colaboradorId', async (req: Request, res: Response) => {
       porCodigo.get(cod)!.push(d);
     });
 
+    // Tipos de documento com solicitação pendente (em análise)
+    const tiposEmAnalise = new Set<string>();
+    for (const sol of solicitacoesPendentes) {
+      try {
+        const dados = JSON.parse(sol.dados_solicitados || '{}');
+        if (dados.tipo_id) tiposEmAnalise.add(dados.tipo_id);
+        if (dados.tipo) tiposEmAnalise.add(normalizar(dados.tipo));
+      } catch {}
+    }
+
     // Checklist: um item por tipo exigido, com o documento mais recente daquele tipo
     const checklist = tiposExigidos.map(tipo => {
       // Casa por tipo_id (vínculo estável); cai para o código nos registros antigos
       const candidatos = porTipoId.get(tipo.id) || porCodigo.get(normalizar(tipo.codigo)) || [];
       const doc = candidatos[0] || null;
-      const situacao: StatusDoc | 'pendente' = doc
+      const temSolicitacao = tiposEmAnalise.has(tipo.id) || tiposEmAnalise.has(normalizar(tipo.codigo));
+      const situacao: StatusDoc | 'pendente' | 'em_analise' = doc
         ? situacaoDoDocumento(doc.data_vencimento, tipo.dias_alerta)
-        : 'pendente';
+        : temSolicitacao ? 'em_analise' : 'pendente';
 
       return {
         tipo_id: tipo.id,

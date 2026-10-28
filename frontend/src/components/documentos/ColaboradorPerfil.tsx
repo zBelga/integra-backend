@@ -337,7 +337,7 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
   const obrigatoriosVisiveis = useMemo(() => {
     if (verTodosObrigatorios || checklist.length <= 18) return checklist;
     // Pendentes e vencidos primeiro — é o que precisa de ação
-    const peso: Record<string, number> = { pendente: 0, vencido: 1, a_vencer: 2, valido: 3, sem_validade: 3 };
+    const peso: Record<string, number> = { pendente: 0, em_analise: 1, vencido: 2, a_vencer: 3, valido: 4, sem_validade: 4 };
     return [...checklist].sort((a, b) => peso[a.situacao] - peso[b.situacao]).slice(0, 9);
   }, [checklist, verTodosObrigatorios]);
 
@@ -359,8 +359,11 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
     setShowUpload(true);
   };
 
-  /** Pode clicar no card do checklist? Anexar exige "criar" (ou "solicitar"); substituir exige "editar". */
-  const podeAgirNoItem = (item: ChecklistItem) => (item.documento_id ? perm.editar : (perm.criar || !!perm.solicitar));
+  /** Pode clicar no card do checklist? Anexar exige "criar" (ou "solicitar"); substituir exige "editar". Em análise bloqueia. */
+  const podeAgirNoItem = (item: ChecklistItem) => {
+    if (item.situacao === 'em_analise') return false;
+    return item.documento_id ? perm.editar : (perm.criar || !!perm.solicitar);
+  };
 
   const comArquivo = async (doc: Documento, acao: 'ver' | 'baixar') => {
     setOcupadoId(doc.id);
@@ -664,7 +667,7 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
                         type="button"
                         onClick={() => (anexo ? comArquivo(anexo, 'ver') : liberado && abrirUpload(item))}
                         disabled={!anexo && !liberado}
-                        title={anexo ? `Visualizar ${item.nome}` : liberado ? `Anexar ${item.nome}` : 'Sem permissão para esta ação'}
+                        title={anexo ? `Visualizar ${item.nome}` : item.situacao === 'em_analise' ? 'Aguardando aprovação' : liberado ? `Anexar ${item.nome}` : 'Sem permissão para esta ação'}
                         className={`flex flex-col items-center gap-2 w-full ${anexo || liberado ? 'cursor-pointer' : 'cursor-default'}`}
                       >
                         <Icone className="w-7 h-7 text-[#5B21E6] mt-1" strokeWidth={1.6} />
@@ -678,7 +681,7 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
                           {e.rotulo}
                           {item.situacao === 'a_vencer' && dias != null ? ` ${dias}d` : ''}
                         </span>
-                        {item.data_vencimento && item.situacao !== 'pendente' && (
+                        {item.data_vencimento && item.situacao !== 'pendente' && item.situacao !== 'em_analise' && (
                           <span className="text-[10px] text-[#687582]">Vence {formatDateBR(item.data_vencimento)}</span>
                         )}
                       </button>

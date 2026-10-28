@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   LayoutDashboard,
   Building2,
@@ -21,6 +21,7 @@ import {
 import { ActiveView, ChaveModulo, Empresa, UsuarioSessao } from '../../types';
 import { podeNaTela } from '../../utils/permissoes';
 import { getCompanyTheme } from '../../utils/theme';
+import { fetchSolicitacoesStats } from '../../services/api';
 
 interface LeftSidebarProps {
   currentView: ActiveView;
@@ -49,6 +50,8 @@ interface ItemNav {
   somenteGestao?: boolean;
   /** Chave 'modulo.tela' do catálogo de permissões: sem "ver", o item não aparece */
   tela?: string;
+  /** Badge numérico (ex.: pendências) */
+  badge?: number;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -170,6 +173,20 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
     ? permissoes.master || podeNaTela(permissoes, 'aprovacoes.solicitacoes', 'ver')
     : false;
 
+  // Badge de pendências na sidebar
+  const [pendentes, setPendentes] = useState(0);
+  useEffect(() => {
+    if (!verSolicitacoes) return;
+    let cancelado = false;
+    const carregar = () =>
+      fetchSolicitacoesStats(selectedEmpresa?.id)
+        .then(r => { if (!cancelado && r.success) setPendentes(r.data.pendente ?? 0); })
+        .catch(() => {});
+    carregar();
+    const t = setInterval(carregar, 60_000); // refresh a cada 1 min
+    return () => { cancelado = true; clearInterval(t); };
+  }, [verSolicitacoes, selectedEmpresa?.id]);
+
   const handleNavClick = (view: ActiveView) => {
     onNavigate(view);
     onCloseMobile?.();
@@ -208,7 +225,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
         onClick={() => handleNavClick(item.view)}
         title={isCollapsed ? (item.titulo || item.label) : undefined}
         aria-current={ativo ? 'page' : undefined}
-        className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+        className={`relative w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
           ativo ? 'text-white shadow-xs' : 'text-[#17212B] hover:bg-[#F4F6F8]'
         }`}
         style={{
@@ -217,7 +234,17 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
         }}
       >
         <Icone className={`w-4 h-4 flex-shrink-0 ${ativo ? 'text-white' : 'text-[#687582]'}`} />
-        {!isCollapsed && <span className="truncate">{item.label}</span>}
+        {!isCollapsed && <span className="truncate flex-1 text-left">{item.label}</span>}
+        {!isCollapsed && !!item.badge && item.badge > 0 && (
+          <span className={`ml-auto min-w-[20px] h-5 flex items-center justify-center px-1.5 text-[10px] font-bold rounded-full shrink-0 ${
+            ativo ? 'bg-white/25 text-white' : 'bg-[#D64550] text-white'
+          }`}>
+            {item.badge > 99 ? '99+' : item.badge}
+          </span>
+        )}
+        {isCollapsed && !!item.badge && item.badge > 0 && (
+          <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-[#D64550] rounded-full border-2 border-white" />
+        )}
       </button>
     );
   };
@@ -337,7 +364,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                 </div>
               )}
               <BotaoNav
-                item={{ view: 'solicitacoes', label: 'Solicitações', icon: Send, titulo: 'Central de Solicitações & Aprovações' }}
+                item={{ view: 'solicitacoes', label: 'Solicitações', icon: Send, titulo: 'Central de Solicitações & Aprovações', badge: pendentes }}
               />
             </div>
           )}

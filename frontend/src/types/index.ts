@@ -349,7 +349,7 @@ export interface DocumentoTipoFormData {
 }
 
 /** Situação de um item do checklist do colaborador */
-export type SituacaoDocumento = 'pendente' | 'valido' | 'a_vencer' | 'vencido' | 'sem_validade';
+export type SituacaoDocumento = 'pendente' | 'em_analise' | 'valido' | 'a_vencer' | 'vencido' | 'sem_validade';
 
 export interface ChecklistItem {
   tipo_id: string;
