@@ -48,7 +48,7 @@ export const AdministrativoView: React.FC<AdministrativoViewProps> = ({
   const podeGerenciarObras =
     podeNaTela(permissoes, 'administrativo.obras', 'criar') ||
     podeNaTela(permissoes, 'administrativo.obras', 'editar');
-  const podeVerDocumentos = podeNaTela(permissoes, 'documentacao.documentos', 'ver');
+  const podeVerDocumentos = master || podeNaTela(permissoes, 'documentacao.documentos', 'ver');
 
   // Active simulated role inside the module
   const [activeRole, setActiveRole] = useState<'encarregado' | 'assistente' | 'master'>('encarregado');

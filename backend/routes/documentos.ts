@@ -729,9 +729,11 @@ router.post('/solicitar', async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: 'Campos obrigatórios faltando.' });
     }
 
-    // Permissão: precisa ter "solicitar" na tela de documentos
+    // Permissão: precisa ter "solicitar" ou "criar" na tela de documentos.
+    // Quem tem "criar" mas não "autorizar" também passa por aqui — o upload
+    // é roteado para aprovação pelo frontend quando o usuário não pode aprovar.
     const perm = await permissoesDocumentos(req);
-    if (!perm.solicitar) {
+    if (!perm.solicitar && !perm.criar) {
       return res.status(403).json({
         success: false,
         error: 'Seu cargo não possui permissão para solicitar anexo de documentos.',
