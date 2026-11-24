@@ -7,7 +7,7 @@
  * em que o botão de contratar foi clicado.
  */
 import React, { useState, useEffect, useCallback } from 'react';
-import { Loader2, Download, UserCheck, Users, AlertCircle, ExternalLink, FileText } from 'lucide-react';
+import { Loader2, Download, UserCheck, Users, AlertCircle, FileText } from 'lucide-react';
 import { fetchContratadosDoDia, fetchChecklistColaborador } from '../../services/api';
 import type { Colaborador } from '../../types';
 import { applyCPFMask, formatDateBR } from '../../utils/cpfMask';
@@ -25,7 +25,7 @@ interface Props {
   onFinalizar?: () => void;
 }
 
-export const ContratadosDoDia: React.FC<Props> = ({ data, corEmpresa, onVerNoEfetivo, onVerDocumentos, onFinalizar }) => {
+export const ContratadosDoDia: React.FC<Props> = ({ data, corEmpresa, onVerDocumentos, onFinalizar }) => {
   const [lista, setLista] = useState<Colaborador[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [erro, setErro] = useState('');
@@ -157,7 +157,6 @@ export const ContratadosDoDia: React.FC<Props> = ({ data, corEmpresa, onVerNoEfe
                 <th className="px-4 py-3 text-[10px] font-bold text-[#687582] uppercase tracking-wider">Obra</th>
                 <th className="px-4 py-3 text-[10px] font-bold text-[#687582] uppercase tracking-wider">Admissão</th>
                 <th className="px-4 py-3 text-[10px] font-bold text-[#687582] uppercase tracking-wider">Documentos</th>
-                {onVerNoEfetivo && <th className="px-4 py-3" />}
                 {onVerDocumentos && <th className="px-4 py-3" />}
               </tr>
             </thead>
@@ -192,17 +191,6 @@ export const ContratadosDoDia: React.FC<Props> = ({ data, corEmpresa, onVerNoEfe
                       );
                     })()}
                   </td>
-                  {onVerNoEfetivo && (
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        onClick={() => onVerNoEfetivo(c)}
-                        title="Abrir no Efetivo Geral"
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 border border-[#DDE3E8] hover:border-[#B6C2CC] rounded-lg text-[11px] font-semibold text-[#17212B] cursor-pointer"
-                      >
-                        <ExternalLink className="w-3 h-3" /> Ver ficha
-                      </button>
-                    </td>
-                  )}
                   {onVerDocumentos && (
                     <td className="px-4 py-3 text-right">
                       <button
