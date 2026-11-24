@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { queryRows, executeQuery, saveDbToDisk } from '../db.js';
 import { generateToken } from '../middleware/auth.js';
+import { verificarSenha, hashSenhaSync } from '../utils/senha.js';
 
 import { requireAuth } from '../middleware/auth.js';
 const router = Router();
@@ -49,13 +50,18 @@ router.post('/login', async (req: Request, res: Response) => {
       });
     }
 
-    // Comparação simples de senha (texto puro)
-    // TODO: migrar para bcrypt — hash as senhas existentes com uma migration
-    if (user.senha !== senha) {
+    // Senha com bcrypt. Senhas antigas (texto puro) são aceitas uma vez
+    // e regravadas com hash logo em seguida.
+    const conferencia = await verificarSenha(String(senha), user.senha);
+    if (!conferencia.ok) {
       return res.status(401).json({
         success: false,
         error: 'Credenciais inválidas.',
       });
+    }
+    if (conferencia.precisaRehash) {
+      await executeQuery('UPDATE usuarios SET senha = ? WHERE id = ?', [hashSenhaSync(String(senha)), user.id]);
+      await saveDbToDisk();
     }
 
     // Senha que o administrador definiu: a pessoa troca antes de usar o sistema
@@ -174,7 +180,7 @@ router.post('/trocar-senha', requireAuth, async (req: Request, res: Response) =>
     const provisoria = Number(u.senha_provisoria) === 1;
 
     // Fora do primeiro acesso, confere a senha atual antes de trocar
-    if (!provisoria && u.senha !== atual) {
+    if (!provisoria && !(await verificarSenha(atual, u.senha)).ok) {
       return res.status(401).json({ success: false, error: 'Senha atual incorreta.' });
     }
 
@@ -184,7 +190,7 @@ router.post('/trocar-senha', requireAuth, async (req: Request, res: Response) =>
         error: 'A nova senha precisa ter pelo menos 6 caracteres.',
       });
     }
-    if (nova.trim() === String(u.senha || '')) {
+    if ((await verificarSenha(nova.trim(), u.senha)).ok) {
       return res.status(400).json({
         success: false,
         error: 'A nova senha precisa ser diferente da atual.',
@@ -193,7 +199,7 @@ router.post('/trocar-senha', requireAuth, async (req: Request, res: Response) =>
 
     await executeQuery(
       'UPDATE usuarios SET senha = ?, senha_provisoria = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [nova.trim(), u.id]
+      [hashSenhaSync(nova.trim()), u.id]
     );
     await saveDbToDisk();
 

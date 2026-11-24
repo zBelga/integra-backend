@@ -7,6 +7,7 @@ import {
   contarTabelas,
 } from './dbSupabase.js';
 import fs from 'fs';
+import { hashSenhaSync } from './utils/senha.js';
 import path from 'path';
 
 // Diretório de dados:
@@ -519,7 +520,7 @@ function seedDefaultUsuarios(database: Database) {
       usr.id,
       usr.nome,
       usr.email,
-      usr.senha,
+      hashSenhaSync(usr.senha),
       usr.cargo,
       usr.perfil,
       usr.empresa_id,

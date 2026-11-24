@@ -114,7 +114,7 @@ async function startServer() {
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 [Sistema Integra] API rodando na porta ${PORT}`);
     console.log(`   Modo: ${API_ONLY ? 'API-ONLY (frontend separado)' : 'DEV (Vite integrado)'}`);
-    console.log(`   CORS liberado para: ${process.env.CORS_ORIGINS || '* (dev)'}`);
+    console.log(`   CORS liberado para: ${process.env.CORS_ORIGINS || '(nenhuma origem; só localhost)'}`);
   });
 }
 

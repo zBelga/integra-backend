@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Upload, FileText, AlertCircle, Check, Sparkles, Send } from 'lucide-react';
-import { uploadDocumento, solicitarDocumento } from '../../services/api';
+import { uploadDocumento, solicitarDocumento, enviarArquivoDireto } from '../../services/api';
 import { addMeses } from '../../constants/documentosUI';
 
 /** Um tipo do catálogo da empresa (vem do banco, não de uma lista fixa). */
@@ -135,14 +135,13 @@ export const UploadDocumentoModal: React.FC<UploadDocumentoModalProps> = ({
     setProgresso(20);
 
     try {
-      const fileBase64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const result = reader.result as string;
-          resolve(result.split(',')[1]);
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(selectedFile);
+      // Arquivo vai direto ao armazenamento; o servidor só autoriza e registra
+      const uploadId = await enviarArquivoDireto({
+        modo: ehSolicitacao ? 'solicitar' : 'upload',
+        colaborador_id: colaboradorId,
+        nome_arquivo: selectedFile.name,
+        substitui_id: substituindo?.id,
+        file: selectedFile,
       });
 
       setProgresso(60);
@@ -155,7 +154,7 @@ export const UploadDocumentoModal: React.FC<UploadDocumentoModalProps> = ({
         substitui_id: substituindo?.id,
         nome: nome.trim(),
         nome_arquivo: selectedFile.name,
-        fileBase64,
+        upload_id: uploadId,
         mimeType: selectedFile.type || 'application/octet-stream',
         data_emissao: dataEmissao,
         data_vencimento: dataVencimento,

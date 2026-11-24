@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { queryRows, executeQuery } from '../db.js';
 
 import { somenteMaster, limparCachePermissoes } from '../utils/permissoes.js';
+import { hashSenhaSync } from '../utils/senha.js';
 const router = Router();
 
 /**
@@ -204,7 +205,7 @@ router.post('/', somenteMaster, async (req: Request, res: Response) => {
       id,
       nome.trim(),
       normalizedEmail,
-      initialPassword,
+      hashSenhaSync(initialPassword),
       resolvedCargoId,
       resolvedCargoName,
       perfil,

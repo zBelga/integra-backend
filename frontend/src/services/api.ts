@@ -817,7 +817,10 @@ export interface UploadDocumentoPayload {
   tipo: string;
   nome: string;
   nome_arquivo: string;
-  fileBase64: string;
+  /** Id do envio feito direto ao Storage (ver enviarArquivoDireto). Substitui fileBase64. */
+  upload_id?: string;
+  /** Legado: arquivo em base64 no corpo. Só para compatibilidade. */
+  fileBase64?: string;
   mimeType: string;
   data_emissao?: string;
   data_vencimento?: string;
@@ -897,14 +900,55 @@ export async function downloadDocumento(
   return json;
 }
 
-/** Baixa todos os documentos de um colaborador como um ZIP. */
+/**
+ * Envio em 2 passos: o servidor só autoriza e gera o link; o arquivo vai direto
+ * para o Supabase. Devolve o upload_id para ser usado em uploadDocumento/solicitarDocumento.
+ */
+export async function enviarArquivoDireto(opts: {
+  modo: 'upload' | 'solicitar';
+  colaborador_id: string;
+  nome_arquivo: string;
+  substitui_id?: string;
+  file: File;
+}): Promise<string> {
+  const res = await apiFetch('/api/documentos/upload-url', {
+    method: 'POST',
+    body: JSON.stringify({
+      modo: opts.modo,
+      colaborador_id: opts.colaborador_id,
+      nome_arquivo: opts.nome_arquivo,
+      substitui_id: opts.substitui_id,
+    }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Não foi possível preparar o envio do arquivo.');
+
+  const envio = await fetch(json.signed_url, {
+    method: 'PUT',
+    headers: { 'Content-Type': opts.file.type || 'application/octet-stream' },
+    body: opts.file,
+  });
+  if (!envio.ok) throw new Error('Falha ao enviar o arquivo. Verifique a conexão e tente de novo.');
+  return json.upload_id as string;
+}
+
+/**
+ * Baixa todos os documentos de um colaborador como um ZIP.
+ * O servidor devolve só os nomes e os links; o ZIP é montado aqui, no navegador.
+ */
 export async function downloadTodosZip(colaboradorId: string): Promise<Blob> {
-  const res = await apiFetch(`/api/documentos/colaborador/${colaboradorId}/download-zip`);
-  if (!res.ok) {
-    const json = await res.json().catch(() => ({}));
-    throw new Error((json as any).error || 'Erro ao gerar ZIP');
+  const res = await apiFetch(`/api/documentos/colaborador/${colaboradorId}/arquivos-zip`);
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((json as any).error || 'Erro ao gerar ZIP');
+
+  const { default: JSZip } = await import('jszip');
+  const zip = new JSZip();
+  for (const arq of (json.arquivos || []) as Array<{ nome: string; url: string }>) {
+    const r = await fetch(arq.url);
+    if (!r.ok) continue; // pula arquivo com problema, igual ao servidor fazia
+    zip.file(arq.nome, await r.blob());
   }
-  return res.blob();
+  return zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 5 } });
 }
 
 /** Exclusão reversível: o arquivo fica guardado e pode ser restaurado pelo histórico. */

@@ -87,6 +87,47 @@ function generateId() {
   return `doc-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
+/** Id de envio que o navegador recebeu do /upload-url. Só aceita o formato gerado pelo servidor. */
+function uploadIdValido(valor: unknown): string | null {
+  if (valor === undefined || valor === null || valor === '') return null;
+  const s = String(valor);
+  return /^doc-\d+-[a-z0-9]{3,12}$/.test(s) ? s : null;
+}
+
+/**
+ * Confere que o arquivo já chegou ao Storage (enviado direto pelo navegador):
+ * existe, não está vazio e respeita o limite. Se estiver errado, remove o objeto.
+ */
+async function conferirArquivoEnviado(
+  sb: SupabaseClient,
+  storagePath: string,
+  maxBytes: number
+): Promise<{ ok: true; size: number } | { ok: false; status: number; error: string }> {
+  const partes = storagePath.split('/');
+  const nome = partes.pop() as string;
+  const pasta = partes.join('/');
+  const { data, error } = await sb.storage.from('documentos').list(pasta, { limit: 1000 });
+  if (error) throw error;
+  const obj = (data || []).find((o: any) => o.name === nome) as any;
+  if (!obj) {
+    return { ok: false, status: 400, error: 'O arquivo não chegou ao servidor. Tente enviar de novo.' };
+  }
+  const size = Number(obj.metadata?.size || 0);
+  if (size === 0) {
+    await sb.storage.from('documentos').remove([storagePath]);
+    return { ok: false, status: 400, error: 'Arquivo vazio.' };
+  }
+  if (size > maxBytes) {
+    await sb.storage.from('documentos').remove([storagePath]);
+    return {
+      ok: false,
+      status: 413,
+      error: `Arquivo muito grande (${(size / 1024 / 1024).toFixed(1)} MB). Máximo 10 MB.`,
+    };
+  }
+  return { ok: true, size };
+}
+
 
 function normalizar(texto: string): string {
   return String(texto || '').trim().toUpperCase();
@@ -534,6 +575,59 @@ router.get('/colaborador/:id', async (req: Request, res: Response) => {
  * Com `substitui_id`, é uma SUBSTITUIÇÃO: o anterior vira 'substituido',
  * continua no Storage e aparece nas versões antigas do histórico.
  */
+/**
+ * POST /api/documentos/upload-url — passo 1 do envio direto.
+ * Confere permissão e colaborador, reserva o caminho do arquivo e devolve uma URL
+ * assinada para o navegador enviar o arquivo direto ao Supabase.
+ * Body: { colaborador_id, nome_arquivo, substitui_id?, modo?: 'upload' | 'solicitar' }
+ */
+router.post('/upload-url', async (req: Request, res: Response) => {
+  try {
+    const { colaborador_id, nome_arquivo, substitui_id, modo } = req.body || {};
+    if (!colaborador_id || !nome_arquivo) {
+      return res.status(400).json({ success: false, error: 'Campos obrigatórios faltando.' });
+    }
+    const pendente = modo === 'solicitar';
+
+    if (pendente) {
+      const perm = await permissoesDocumentos(req);
+      if (!perm.solicitar && !perm.criar) {
+        return res.status(403).json({
+          success: false,
+          error: 'Seu cargo não possui permissão para solicitar anexo de documentos.',
+        });
+      }
+    } else {
+      const acao = substitui_id ? 'editar' : 'criar';
+      if (!(await pode(req, acao))) {
+        return res.status(403).json({ success: false, error: MENSAGEM_SEM_PERMISSAO[acao] });
+      }
+    }
+
+    if (!/\.(pdf|jpe?g|png|webp)$/i.test(String(nome_arquivo))) {
+      return res.status(400).json({ success: false, error: 'Formato não aceito. Use PDF, JPG, PNG ou WEBP.' });
+    }
+
+    const colaborador = await buscarColaborador(colaborador_id, empresaDoPedido(req));
+    if (!colaborador) return res.status(404).json({ success: false, error: 'Colaborador não encontrado.' });
+    if (!mesmaEmpresa(req, colaborador.empresa_id)) {
+      return res.status(403).json({ success: false, error: 'Colaborador de outra empresa.' });
+    }
+
+    const id = generateId();
+    const ext = String(nome_arquivo).split('.').pop()?.toLowerCase() || 'bin';
+    const storagePath = `${pendente ? 'pendentes/' : ''}${colaborador.empresa_id}/${colaborador.id}/${id}.${ext}`;
+
+    const supabase = getSupabase();
+    const { data, error } = await supabase.storage.from('documentos').createSignedUploadUrl(storagePath);
+    if (error || !data) throw error || new Error('Não foi possível preparar o envio do arquivo.');
+
+    res.json({ success: true, upload_id: id, storage_path: storagePath, signed_url: data.signedUrl });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 router.post('/upload', async (req: Request, res: Response) => {
   try {
     const {
@@ -549,7 +643,7 @@ router.post('/upload', async (req: Request, res: Response) => {
       substitui_id,
     } = req.body;
 
-    if (!colaborador_id || !tipo || !nome || !nome_arquivo || !fileBase64) {
+    if (!colaborador_id || !tipo || !nome || !nome_arquivo || (!fileBase64 && !req.body.upload_id)) {
       return res.status(400).json({ success: false, error: 'Campos obrigatórios faltando.' });
     }
 
@@ -584,15 +678,23 @@ router.post('/upload', async (req: Request, res: Response) => {
 
     // Validação de tamanho e formato também no servidor
     const MAX_BYTES = 10 * 1024 * 1024;
-    const buffer = Buffer.from(fileBase64, 'base64');
-    if (buffer.length === 0) {
-      return res.status(400).json({ success: false, error: 'Arquivo vazio.' });
+    if (req.body.upload_id && !uploadIdValido(req.body.upload_id)) {
+      return res.status(400).json({ success: false, error: 'Identificador de envio inválido.' });
     }
-    if (buffer.length > MAX_BYTES) {
-      return res.status(413).json({
-        success: false,
-        error: `Arquivo muito grande (${(buffer.length / 1024 / 1024).toFixed(1)} MB). Máximo 10 MB.`,
-      });
+    const uploadIdRecebido = uploadIdValido(req.body.upload_id);
+    // Envio antigo (base64 no corpo) continua aceito; o novo chega via Storage
+    let buffer: Buffer | null = null;
+    if (!uploadIdRecebido) {
+      buffer = Buffer.from(fileBase64, 'base64');
+      if (buffer.length === 0) {
+        return res.status(400).json({ success: false, error: 'Arquivo vazio.' });
+      }
+      if (buffer.length > MAX_BYTES) {
+        return res.status(413).json({
+          success: false,
+          error: `Arquivo muito grande (${(buffer.length / 1024 / 1024).toFixed(1)} MB). Máximo 10 MB.`,
+        });
+      }
     }
     if (!/\.(pdf|jpe?g|png|webp)$/i.test(String(nome_arquivo))) {
       return res.status(400).json({ success: false, error: 'Formato não aceito. Use PDF, JPG, PNG ou WEBP.' });
@@ -624,19 +726,36 @@ router.post('/upload', async (req: Request, res: Response) => {
       tipo_id = achado?.id || null;
     }
 
-    const id = generateId();
+    const id = uploadIdRecebido || generateId();
     const ext = String(nome_arquivo).split('.').pop()?.toLowerCase() || 'bin';
     // Caminho separado por empresa: isolamento também dentro do Storage
     const storagePath = `${empresa_id}/${colaborador.id}/${id}.${ext}`;
 
-    const { error: uploadError } = await supabase.storage
-      .from('documentos')
-      .upload(storagePath, buffer, {
-        contentType: mimeType || 'application/octet-stream',
-        upsert: false,
-      });
+    if (uploadIdRecebido) {
+      // Um mesmo envio não pode virar dois documentos: o rollback removeria o arquivo de quem já usou
+      const { data: jaExiste } = await supabase.from('documentos').select('id').eq('id', id).maybeSingle();
+      if (jaExiste) {
+        return res.status(409).json({ success: false, error: 'Este envio já foi registrado.' });
+      }
+    }
 
-    if (uploadError) throw uploadError;
+    let tamanhoBytes: number;
+    if (buffer) {
+      const { error: uploadError } = await supabase.storage
+        .from('documentos')
+        .upload(storagePath, buffer, {
+          contentType: mimeType || 'application/octet-stream',
+          upsert: false,
+        });
+      if (uploadError) throw uploadError;
+      tamanhoBytes = buffer.length;
+    } else {
+      const conferido = await conferirArquivoEnviado(supabase, storagePath, MAX_BYTES);
+      if (conferido.ok === false) {
+        return res.status(conferido.status).json({ success: false, error: conferido.error });
+      }
+      tamanhoBytes = conferido.size;
+    }
 
     const { data, error: dbError } = await supabase
       .from('documentos')
@@ -649,7 +768,7 @@ router.post('/upload', async (req: Request, res: Response) => {
         nome,
         nome_arquivo,
         storage_path: storagePath,
-        tamanho_bytes: buffer.length,
+        tamanho_bytes: tamanhoBytes,
         data_emissao: data_emissao || '',
         data_vencimento: data_vencimento || '',
         observacoes: observacoes || '',
@@ -743,7 +862,7 @@ router.post('/solicitar', async (req: Request, res: Response) => {
       substitui_id,
     } = req.body;
 
-    if (!colaborador_id || !tipo || !nome || !nome_arquivo || !fileBase64) {
+    if (!colaborador_id || !tipo || !nome || !nome_arquivo || (!fileBase64 && !req.body.upload_id)) {
       return res.status(400).json({ success: false, error: 'Campos obrigatórios faltando.' });
     }
 
@@ -767,15 +886,22 @@ router.post('/solicitar', async (req: Request, res: Response) => {
 
     // Validação do arquivo (mesma do upload direto)
     const MAX_BYTES = 10 * 1024 * 1024;
-    const buffer = Buffer.from(fileBase64, 'base64');
-    if (buffer.length === 0) {
-      return res.status(400).json({ success: false, error: 'Arquivo vazio.' });
+    if (req.body.upload_id && !uploadIdValido(req.body.upload_id)) {
+      return res.status(400).json({ success: false, error: 'Identificador de envio inválido.' });
     }
-    if (buffer.length > MAX_BYTES) {
-      return res.status(413).json({
-        success: false,
-        error: `Arquivo muito grande (${(buffer.length / 1024 / 1024).toFixed(1)} MB). Máximo 10 MB.`,
-      });
+    const uploadIdRecebido = uploadIdValido(req.body.upload_id);
+    let buffer: Buffer | null = null;
+    if (!uploadIdRecebido) {
+      buffer = Buffer.from(fileBase64, 'base64');
+      if (buffer.length === 0) {
+        return res.status(400).json({ success: false, error: 'Arquivo vazio.' });
+      }
+      if (buffer.length > MAX_BYTES) {
+        return res.status(413).json({
+          success: false,
+          error: `Arquivo muito grande (${(buffer.length / 1024 / 1024).toFixed(1)} MB). Máximo 10 MB.`,
+        });
+      }
     }
     if (!/\.(pdf|jpe?g|png|webp)$/i.test(String(nome_arquivo))) {
       return res.status(400).json({ success: false, error: 'Formato não aceito. Use PDF, JPG, PNG ou WEBP.' });
@@ -803,17 +929,26 @@ router.post('/solicitar', async (req: Request, res: Response) => {
     // Faz upload para Supabase Storage numa pasta "pendentes/" para isolar
     const supabase = getSupabase();
     const ext = String(nome_arquivo).split('.').pop()?.toLowerCase() || 'bin';
-    const tempId = `pending-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    const tempId = uploadIdRecebido || `pending-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
     const storagePath = `pendentes/${empresa_id}/${colaborador.id}/${tempId}.${ext}`;
 
-    const { error: uploadError } = await supabase.storage
-      .from('documentos')
-      .upload(storagePath, buffer, {
-        contentType: mimeType || 'application/octet-stream',
-        upsert: false,
-      });
-
-    if (uploadError) throw uploadError;
+    let tamanhoSolicitado: number;
+    if (buffer) {
+      const { error: uploadError } = await supabase.storage
+        .from('documentos')
+        .upload(storagePath, buffer, {
+          contentType: mimeType || 'application/octet-stream',
+          upsert: false,
+        });
+      if (uploadError) throw uploadError;
+      tamanhoSolicitado = buffer.length;
+    } else {
+      const conferido = await conferirArquivoEnviado(supabase, storagePath, MAX_BYTES);
+      if (conferido.ok === false) {
+        return res.status(conferido.status).json({ success: false, error: conferido.error });
+      }
+      tamanhoSolicitado = conferido.size;
+    }
 
     // Criar a solicitação no banco via tabela solicitacoes_alteracao
     const seqRows = await queryRows('SELECT MAX(codigo_sequencial) as maxSeq FROM solicitacoes_alteracao');
@@ -828,7 +963,7 @@ router.post('/solicitar', async (req: Request, res: Response) => {
       nome,
       nome_arquivo,
       storage_path: storagePath,
-      tamanho_bytes: buffer.length,
+      tamanho_bytes: tamanhoSolicitado,
       mime_type: mimeType || 'application/octet-stream',
       data_emissao: data_emissao || '',
       data_vencimento: data_vencimento || '',
@@ -941,6 +1076,77 @@ router.get('/:id/download', async (req: Request, res: Response) => {
  * GET /api/documentos/colaborador/:id/download-zip
  * Baixa todos os documentos ativos do colaborador em um ZIP.
  */
+/**
+ * GET /api/documentos/colaborador/:id/arquivos-zip
+ * Não junta os arquivos no servidor: devolve nomes e links temporários para o
+ * navegador montar o ZIP. Assim o Railway não carrega os arquivos na memória.
+ */
+router.get('/colaborador/:id/arquivos-zip', async (req: Request, res: Response) => {
+  try {
+    if (!(await podeBaixar(req))) {
+      return res.status(403).json({ success: false, error: 'Sem permissão para baixar documentos.' });
+    }
+
+    const supabase = getSupabase();
+    const empresa_id = empresaDoPedido(req);
+    const colaboradorId = req.params.id;
+
+    const colaborador = await buscarColaborador(colaboradorId, empresa_id);
+    if (!colaborador || !mesmaEmpresa(req, colaborador.empresa_id)) {
+      return res.status(404).json({ success: false, error: 'Colaborador não encontrado.' });
+    }
+
+    const { data: docs, error: docsErr } = await supabase
+      .from('documentos')
+      .select('id, storage_path, nome_arquivo, tipo')
+      .eq('colaborador_id', colaboradorId)
+      .eq('empresa_id', empresa_id)
+      .neq('status', 'excluido')
+      .not('storage_path', 'is', null);
+
+    if (docsErr) throw docsErr;
+    if (!docs || docs.length === 0) {
+      return res.status(404).json({ success: false, error: 'Nenhum documento para baixar.' });
+    }
+
+    const limpar = (t: string) =>
+      String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '').toUpperCase();
+    const nomeColab = limpar(colaborador.nome) || 'COLABORADOR';
+
+    const { data: links, error: linkErr } = await supabase.storage
+      .from('documentos')
+      .createSignedUrls(docs.map((d: any) => d.storage_path), 600);
+    if (linkErr) throw linkErr;
+    const urlPorCaminho = new Map<string, string>();
+    for (const l of (links || []) as any[]) {
+      if (l.signedUrl && l.path) urlPorCaminho.set(l.path, l.signedUrl);
+    }
+
+    const nomesUsados = new Set<string>();
+    const arquivos: Array<{ nome: string; url: string }> = [];
+    for (const doc of docs as any[]) {
+      const url = urlPorCaminho.get(doc.storage_path);
+      if (!url) continue;
+
+      let nomeArquivo = nomeParaDownload(doc.tipo, colaborador.nome, doc.nome_arquivo);
+      if (nomesUsados.has(nomeArquivo)) {
+        const ext = nomeArquivo.match(/\.([^.]+)$/)?.[1] || '';
+        const base = nomeArquivo.replace(/\.[^.]+$/, '');
+        let i = 2;
+        while (nomesUsados.has(`${base}_${i}.${ext}`)) i++;
+        nomeArquivo = `${base}_${i}.${ext}`;
+      }
+      nomesUsados.add(nomeArquivo);
+      arquivos.push({ nome: nomeArquivo, url });
+    }
+
+    res.json({ success: true, nome_zip: `${nomeColab}_DOCUMENTOS.zip`, arquivos });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 router.get('/colaborador/:id/download-zip', async (req: Request, res: Response) => {
   try {
     if (!(await podeBaixar(req))) {

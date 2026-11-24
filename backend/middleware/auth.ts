@@ -1,7 +1,23 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import { randomBytes } from 'crypto';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'sistema-integra-secret-dev-2026';
+const IS_PROD = process.env.NODE_ENV === 'production';
+
+// Sem segredo padrão no código. Em produção o servidor não sobe sem JWT_SECRET.
+// Em desenvolvimento, usa um segredo aleatório por execução (tokens expiram ao reiniciar).
+const JWT_SECRET: string = (() => {
+  const definido = process.env.JWT_SECRET;
+  if (definido) {
+    if (definido.length < 32) console.warn('[AUTH] JWT_SECRET curto: recomendado 32+ caracteres.');
+    return definido;
+  }
+  if (IS_PROD) {
+    throw new Error('JWT_SECRET não definido. Configure a variável no Railway antes de subir a API.');
+  }
+  console.warn('[AUTH] JWT_SECRET não definido: usando segredo temporário de desenvolvimento.');
+  return randomBytes(48).toString('hex');
+})();
 
 export interface AuthPayload {
   id: string;

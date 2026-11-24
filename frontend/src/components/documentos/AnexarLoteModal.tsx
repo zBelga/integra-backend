@@ -9,7 +9,7 @@
  */
 import React, { useState, useRef, useMemo } from 'react';
 import { X, Upload, FileText, AlertCircle, CheckCircle2, Trash2, Layers } from 'lucide-react';
-import { uploadDocumento } from '../../services/api';
+import { uploadDocumento, enviarArquivoDireto } from '../../services/api';
 import { addMeses, formatBytes } from '../../constants/documentosUI';
 import type { TipoCatalogo } from './UploadDocumentoModal';
 
@@ -53,14 +53,6 @@ function sugerirTipo(nomeArquivo: string, catalogo: TipoCatalogo[]): string {
   return candidatos[0]?.id || '';
 }
 
-function lerBase64(arquivo: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(String(r.result).split(',')[1] || '');
-    r.onerror = reject;
-    r.readAsDataURL(arquivo);
-  });
-}
 
 export const AnexarLoteModal: React.FC<AnexarLoteModalProps> = ({
   colaboradorId,
@@ -153,6 +145,12 @@ export const AnexarLoteModal: React.FC<AnexarLoteModalProps> = ({
 
       atualizar(l.chave, { status: 'enviando', erro: '' });
       try {
+        const uploadId = await enviarArquivoDireto({
+          modo: 'upload',
+          colaborador_id: colaboradorId,
+          nome_arquivo: l.arquivo.name,
+          file: l.arquivo,
+        });
         await uploadDocumento({
           colaborador_id: colaboradorId,
           empresa_id: empresaId,
@@ -160,7 +158,7 @@ export const AnexarLoteModal: React.FC<AnexarLoteModalProps> = ({
           tipo_id: tipo.id,
           nome: tipo.nome,
           nome_arquivo: l.arquivo.name,
-          fileBase64: await lerBase64(l.arquivo),
+          upload_id: uploadId,
           mimeType: l.arquivo.type || 'application/octet-stream',
           data_emissao: l.emissao,
           data_vencimento: tipo.tem_validade ? l.validade : '',
