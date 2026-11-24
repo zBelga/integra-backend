@@ -8,7 +8,7 @@
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import { Loader2, Download, UserCheck, Users, AlertCircle, ExternalLink, FileText } from 'lucide-react';
-import { fetchContratadosDoDia } from '../../services/api';
+import { fetchContratadosDoDia, fetchChecklistColaborador } from '../../services/api';
 import type { Colaborador } from '../../types';
 import { applyCPFMask, formatDateBR } from '../../utils/cpfMask';
 import { downloadBlob } from '../../utils/excelUtils';
@@ -29,6 +29,8 @@ export const ContratadosDoDia: React.FC<Props> = ({ data, corEmpresa, onVerNoEfe
   const [lista, setLista] = useState<Colaborador[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [erro, setErro] = useState('');
+  /** Situação de documentos de cada contratado (null = ainda carregando / sem acesso) */
+  const [docs, setDocs] = useState<Record<string, { obrigatorios: number; validos: number; vencidos: number } | null>>({});
 
   const carregar = useCallback(async () => {
     setIsLoading(true);
@@ -44,6 +46,22 @@ export const ContratadosDoDia: React.FC<Props> = ({ data, corEmpresa, onVerNoEfe
   }, [data]);
 
   useEffect(() => { carregar(); }, [carregar]);
+
+  /** Busca, para cada contratado, quantos documentos obrigatórios faltam. Só leitura. */
+  useEffect(() => {
+    let cancelado = false;
+    if (lista.length === 0) return;
+    lista.forEach(async (c) => {
+      try {
+        const res = await fetchChecklistColaborador(c.id);
+        const ind = res.data.indicadores;
+        if (!cancelado) setDocs(prev => ({ ...prev, [c.id]: { obrigatorios: ind.obrigatorios, validos: ind.validos, vencidos: ind.vencidos } }));
+      } catch {
+        if (!cancelado) setDocs(prev => ({ ...prev, [c.id]: null }));
+      }
+    });
+    return () => { cancelado = true; };
+  }, [lista]);
 
   /** Exporta a lista do dia em CSV (abre direto no Excel). */
   const exportar = () => {
@@ -138,6 +156,7 @@ export const ContratadosDoDia: React.FC<Props> = ({ data, corEmpresa, onVerNoEfe
                 <th className="px-4 py-3 text-[10px] font-bold text-[#687582] uppercase tracking-wider">Chapa</th>
                 <th className="px-4 py-3 text-[10px] font-bold text-[#687582] uppercase tracking-wider">Obra</th>
                 <th className="px-4 py-3 text-[10px] font-bold text-[#687582] uppercase tracking-wider">Admissão</th>
+                <th className="px-4 py-3 text-[10px] font-bold text-[#687582] uppercase tracking-wider">Documentos</th>
                 {onVerNoEfetivo && <th className="px-4 py-3" />}
                 {onVerDocumentos && <th className="px-4 py-3" />}
               </tr>
@@ -156,6 +175,23 @@ export const ContratadosDoDia: React.FC<Props> = ({ data, corEmpresa, onVerNoEfe
                   <td className="px-4 py-3 text-xs text-[#17212B] font-semibold">{c.numero_chapa || '—'}</td>
                   <td className="px-4 py-3 text-xs text-[#687582]">{c.obra_codigo || c.obra_nome || '—'}</td>
                   <td className="px-4 py-3 text-xs text-[#687582]">{formatDateBR(c.data_admissao)}</td>
+                  <td className="px-4 py-3">
+                    {(() => {
+                      const d = docs[c.id];
+                      if (d === undefined) return <span className="text-xs text-[#8995A1]">carregando…</span>;
+                      if (d === null) return <span className="text-xs text-[#8995A1]">—</span>;
+                      if (d.obrigatorios === 0) return <span className="text-xs text-[#8995A1]">Sem exigências</span>;
+                      const faltam = d.obrigatorios - d.validos;
+                      return (
+                        <div className="flex flex-col gap-1 items-start">
+                          {faltam <= 0
+                            ? <span className="px-2 py-0.5 rounded-md bg-[#E8F7EE] text-[#1E7B4A] text-[11px] font-semibold">Completo</span>
+                            : <span className="px-2 py-0.5 rounded-md bg-[#FFF4E0] text-[#B45309] text-[11px] font-semibold">Faltam {faltam} de {d.obrigatorios}</span>}
+                          {d.vencidos > 0 && <span className="px-2 py-0.5 rounded-md bg-[#FDECEC] text-[#B42318] text-[11px] font-semibold">{d.vencidos} vencido(s)</span>}
+                        </div>
+                      );
+                    })()}
+                  </td>
                   {onVerNoEfetivo && (
                     <td className="px-4 py-3 text-right">
                       <button
