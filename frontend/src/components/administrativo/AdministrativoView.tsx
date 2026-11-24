@@ -417,33 +417,6 @@ export const AdministrativoView: React.FC<AdministrativoViewProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          {/* Link to Solicitacoes */}
-          {onNavigate && (
-            <button
-              onClick={() => onNavigate('solicitacoes')}
-              className="px-3.5 py-2 border border-[#C6E3EB] bg-[#E8F3F6] hover:bg-[#D5EBF1] rounded-xl text-xs font-bold text-[#176B87] transition-colors flex items-center space-x-1.5 shadow-2xs cursor-pointer"
-            >
-              <Send className="w-4 h-4 text-[#176B87]" />
-              <span>Solicitações</span>
-              {pendingRequestsCount > 0 && (
-                <span className="px-1.5 py-0.2 text-[10px] font-extrabold bg-[#D97706] text-white rounded-full">
-                  {pendingRequestsCount}
-                </span>
-              )}
-            </button>
-          )}
-
-          {/* Link to Permissoes — só o master configura */}
-          {onNavigate && master && (
-            <button
-              onClick={() => onNavigate('permissoes')}
-              className="px-3.5 py-2 border border-[#DDE3E8] bg-white hover:bg-[#F8FAFB] rounded-xl text-xs font-semibold text-[#17212B] transition-colors flex items-center space-x-1.5 shadow-2xs cursor-pointer"
-            >
-              <ShieldCheck className="w-4 h-4 text-[#176B87]" />
-              <span>Permissões</span>
-            </button>
-          )}
-
           {/* Export to Excel */}
           {podeExportar && (<button
             onClick={handleExportExcel}

@@ -80,6 +80,15 @@ const MODULOS: ModuloCard[] = [
   },
 ];
 
+
+/** Acabamento visual de cada módulo: gradiente, cor de destaque e anéis de luz */
+const ESTILO_CARD: Record<ChaveModulo, { de: string; ate: string; cor: string; icone: string; anel: string; anelForte: string }> = {
+  administrativo: { de: '#0A1B3D', ate: '#1E40AF', cor: '#3B82F6', icone: '#60A5FA', anel: 'rgba(59,130,246,0.18)', anelForte: 'rgba(96,165,250,0.45)' },
+  documentacoes:  { de: '#0A0A0C', ate: '#B4470F', cor: '#F97316', icone: '#FB923C', anel: 'rgba(249,115,22,0.16)', anelForte: 'rgba(251,146,60,0.45)' },
+  seguranca:      { de: '#1B1040', ate: '#0F1B3D', cor: '#8B5CF6', icone: '#A78BFA', anel: 'rgba(139,92,246,0.18)', anelForte: 'rgba(167,139,250,0.45)' },
+  almoxarifado:   { de: '#1F2328', ate: '#065F46', cor: '#10B981', icone: '#34D399', anel: 'rgba(16,185,129,0.16)', anelForte: 'rgba(52,211,153,0.45)' },
+};
+
 export const Dashboard: React.FC<DashboardProps> = ({
   onSelectModule,
   selectedEmpresa,
@@ -182,10 +191,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <h2 className="text-lg font-bold">Módulos do sistema</h2>
           <p className="text-xs text-[#6E8193] hidden sm:block">Escolha um módulo para abrir suas telas</p>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5 items-stretch">
           {modulosVisiveis.map(mod => {
             const Icone = mod.icon;
             const disponivel = !mod.emBreve;
+            const est = ESTILO_CARD[mod.chave];
             return (
               <div
                 key={mod.chave}
@@ -198,60 +208,96 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     ? e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectModule(mod.view); } }
                     : undefined
                 }
-                className={`group relative rounded-2xl border p-5 flex flex-col justify-between transition-all duration-200 ${
+                className={`group relative isolate overflow-hidden rounded-3xl border min-h-[300px] flex flex-col transition-all duration-300 ease-out ${
                   disponivel
-                    ? 'bg-[#0E1726] border-white/10 hover:-translate-y-0.5 hover:shadow-lg cursor-pointer'
-                    : 'bg-[#0A101B] border-white/5 opacity-60 cursor-not-allowed select-none'
+                    ? 'border-white/10 hover:-translate-y-1.5 hover:shadow-[0_24px_48px_-16px_rgba(0,0,0,0.7)] cursor-pointer'
+                    : 'border-white/5 opacity-60 cursor-not-allowed select-none'
                 }`}
-                style={disponivel ? { backgroundImage: `linear-gradient(160deg, ${mod.bg} 0%, #0E1726 70%)` } : undefined}
-                onMouseEnter={disponivel ? e => { e.currentTarget.style.borderColor = `${mod.cor}66`; } : undefined}
-                onMouseLeave={disponivel ? e => { e.currentTarget.style.borderColor = ''; } : undefined}
+                style={{
+                  background: disponivel
+                    ? `linear-gradient(155deg, ${est.de} 0%, ${est.ate} 100%)`
+                    : 'linear-gradient(155deg, #0E1726 0%, #0A101B 100%)',
+                  boxShadow: disponivel ? `inset 0 1px 0 rgba(255,255,255,0.08), inset 0 0 0 1px ${est.anel}` : undefined,
+                }}
+                onMouseEnter={disponivel ? e => { e.currentTarget.style.boxShadow = `inset 0 1px 0 rgba(255,255,255,0.14), inset 0 0 0 1px ${est.anelForte}, 0 0 40px -10px ${est.cor}55`; } : undefined}
+                onMouseLeave={disponivel ? e => { e.currentTarget.style.boxShadow = `inset 0 1px 0 rgba(255,255,255,0.08), inset 0 0 0 1px ${est.anel}`; } : undefined}
               >
-                <div>
-                  <div className="flex items-center justify-between mb-4">
+                {/* Textura sutil de fundo */}
+                <div
+                  className="pointer-events-none absolute inset-0 opacity-[0.07]"
+                  style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #ffffff 1px, transparent 0)', backgroundSize: '18px 18px' }}
+                  aria-hidden="true"
+                />
+                {/* Brilho de canto, mais forte no hover */}
+                <div
+                  className="pointer-events-none absolute -top-24 -right-20 w-64 h-64 rounded-full blur-3xl opacity-40 group-hover:opacity-70 transition-opacity duration-500"
+                  style={{ backgroundColor: est.cor }}
+                  aria-hidden="true"
+                />
+                {/* Ícone decorativo grande, quase invisível */}
+                <Icone
+                  className="pointer-events-none absolute -right-8 -bottom-8 w-48 h-48 opacity-[0.06] group-hover:opacity-[0.12] group-hover:scale-105 transition-all duration-500"
+                  style={{ color: est.cor }}
+                  aria-hidden="true"
+                  strokeWidth={1}
+                />
+
+                <div className="relative p-6 flex-1 flex flex-col">
+                  <div className="flex items-start justify-between">
                     <div
-                      className="w-11 h-11 rounded-xl flex items-center justify-center"
-                      style={disponivel ? { backgroundColor: `${mod.cor}22`, color: mod.cor } : { backgroundColor: '#ffffff0d', color: '#6E8193' }}
+                      className="w-16 h-16 rounded-2xl flex items-center justify-center transition-transform duration-300 group-hover:scale-110"
+                      style={
+                        disponivel
+                          ? { backgroundColor: `${est.cor}26`, color: est.icone, boxShadow: `0 0 0 1px ${est.cor}40, 0 8px 24px -8px ${est.cor}90` }
+                          : { backgroundColor: 'rgba(255,255,255,0.04)', color: '#6E8193' }
+                      }
                     >
-                      <Icone className="w-5 h-5" />
+                      <Icone className="w-8 h-8" strokeWidth={1.75} />
                     </div>
                     {disponivel ? (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#10B981]/15 text-[#10B981] border border-[#10B981]/30 uppercase tracking-wider">
+                      <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-[#10B981]/15 text-[#34D399] border border-[#10B981]/30 uppercase tracking-wider backdrop-blur-sm">
                         Disponível
                       </span>
                     ) : (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/5 text-[#6E8193] border border-white/10 uppercase tracking-wider flex items-center gap-1">
+                      <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-white/5 text-[#6E8193] border border-white/10 uppercase tracking-wider flex items-center gap-1">
                         <Lock className="w-3 h-3" /> Em breve
                       </span>
                     )}
                   </div>
 
-                  <h3 className={`text-sm font-bold ${disponivel ? 'text-[#E8EEF3]' : 'text-[#6E8193]'}`}>{mod.titulo}</h3>
-                  <p className={`text-xs mt-1.5 leading-relaxed ${disponivel ? 'text-[#93A4B5]' : 'text-[#6E8193]'}`}>
+                  <h3 className={`mt-6 text-lg font-extrabold tracking-tight ${disponivel ? 'text-white' : 'text-[#6E8193]'}`}>
+                    {mod.titulo}
+                  </h3>
+                  <p className={`mt-2 text-sm leading-relaxed ${disponivel ? 'text-[#C4CFDA]' : 'text-[#6E8193]'}`}>
                     {mod.descricao}
                   </p>
 
                   {disponivel && telasDoCard(mod).length > 0 && (
-                    <ul className="mt-3 space-y-1">
+                    <ul className="mt-5 space-y-2">
                       {telasDoCard(mod).map(tela => (
-                        <li key={tela.chave} className="flex items-center gap-2 text-[11px] text-[#93A4B5]">
-                          <span className="w-1 h-1 rounded-full shrink-0" style={{ backgroundColor: mod.cor }} />
+                        <li key={tela.chave} className="flex items-center gap-2.5 text-xs text-[#E2E8F0]/85">
+                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: est.icone, boxShadow: `0 0 8px ${est.icone}` }} />
                           {tela.nome}
                         </li>
                       ))}
                     </ul>
                   )}
-                </div>
 
-                <div className="mt-5 pt-3 border-t border-white/10 flex items-center justify-between text-xs font-semibold">
-                  {disponivel ? (
-                    <>
-                      <span style={{ color: mod.cor }}>Acessar módulo</span>
-                      <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" style={{ color: mod.cor }} />
-                    </>
-                  ) : (
-                    <span className="text-[#6E8193]">Módulo em desenvolvimento</span>
-                  )}
+                  <div className="mt-auto pt-6">
+                    {disponivel ? (
+                      <div
+                        className="flex items-center justify-between rounded-2xl px-4 py-3 text-sm font-bold text-white shadow-lg transition-all duration-300 group-hover:brightness-110 group-hover:shadow-xl"
+                        style={{ background: `linear-gradient(90deg, ${est.cor} 0%, ${est.cor}CC 100%)`, boxShadow: `0 10px 24px -10px ${est.cor}` }}
+                      >
+                        <span>Acessar módulo</span>
+                        <ArrowRight className="w-4.5 h-4.5 transition-transform duration-300 group-hover:translate-x-1" />
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center rounded-2xl px-4 py-3 text-xs font-semibold text-[#6E8193] bg-white/5 border border-white/10">
+                        Módulo em desenvolvimento
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             );
