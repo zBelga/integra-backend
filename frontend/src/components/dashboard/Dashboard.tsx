@@ -83,10 +83,10 @@ const MODULOS: ModuloCard[] = [
 
 /** Acabamento visual de cada módulo: gradiente, cor de destaque e anéis de luz */
 const ESTILO_CARD: Record<ChaveModulo, { de: string; ate: string; cor: string; icone: string; anel: string; anelForte: string }> = {
-  administrativo: { de: '#0A1B3D', ate: '#1E40AF', cor: '#3B82F6', icone: '#60A5FA', anel: 'rgba(59,130,246,0.18)', anelForte: 'rgba(96,165,250,0.45)' },
-  documentacoes:  { de: '#0A0A0C', ate: '#B4470F', cor: '#F97316', icone: '#FB923C', anel: 'rgba(249,115,22,0.16)', anelForte: 'rgba(251,146,60,0.45)' },
-  seguranca:      { de: '#1B1040', ate: '#0F1B3D', cor: '#8B5CF6', icone: '#A78BFA', anel: 'rgba(139,92,246,0.18)', anelForte: 'rgba(167,139,250,0.45)' },
-  almoxarifado:   { de: '#1F2328', ate: '#065F46', cor: '#10B981', icone: '#34D399', anel: 'rgba(16,185,129,0.16)', anelForte: 'rgba(52,211,153,0.45)' },
+  administrativo: { de: '#0F1A33', ate: '#22406E', cor: '#3B82F6', icone: '#60A5FA', anel: 'rgba(59,130,246,0.18)', anelForte: 'rgba(96,165,250,0.45)' },
+  documentacoes:  { de: '#12110F', ate: '#6B3A1C', cor: '#F97316', icone: '#FB923C', anel: 'rgba(249,115,22,0.16)', anelForte: 'rgba(251,146,60,0.45)' },
+  seguranca:      { de: '#17132E', ate: '#2A2456', cor: '#8B5CF6', icone: '#A78BFA', anel: 'rgba(139,92,246,0.18)', anelForte: 'rgba(167,139,250,0.45)' },
+  almoxarifado:   { de: '#1A1D22', ate: '#1F4A3D', cor: '#10B981', icone: '#34D399', anel: 'rgba(16,185,129,0.16)', anelForte: 'rgba(52,211,153,0.45)' },
 };
 
 export const Dashboard: React.FC<DashboardProps> = ({
@@ -230,7 +230,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 />
                 {/* Brilho de canto, mais forte no hover */}
                 <div
-                  className="pointer-events-none absolute -top-24 -right-20 w-64 h-64 rounded-full blur-3xl opacity-40 group-hover:opacity-70 transition-opacity duration-500"
+                  className="pointer-events-none absolute -top-24 -right-20 w-64 h-64 rounded-full blur-3xl opacity-20 group-hover:opacity-40 transition-opacity duration-500"
                   style={{ backgroundColor: est.cor }}
                   aria-hidden="true"
                 />
@@ -287,7 +287,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     {disponivel ? (
                       <div
                         className="flex items-center justify-between rounded-2xl px-4 py-3 text-sm font-bold text-white shadow-lg transition-all duration-300 group-hover:brightness-110 group-hover:shadow-xl"
-                        style={{ background: `linear-gradient(90deg, ${est.cor} 0%, ${est.cor}CC 100%)`, boxShadow: `0 10px 24px -10px ${est.cor}` }}
+                        style={{ background: `linear-gradient(90deg, ${est.cor}E6 0%, ${est.cor}99 100%)`, boxShadow: `0 10px 24px -10px ${est.cor}` }}
                       >
                         <span>Acessar módulo</span>
                         <ArrowRight className="w-4.5 h-4.5 transition-transform duration-300 group-hover:translate-x-1" />
