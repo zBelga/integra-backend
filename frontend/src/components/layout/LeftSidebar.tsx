@@ -203,14 +203,14 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
       return (
         <div
           title={isCollapsed ? `${item.label} (Em breve)` : undefined}
-          className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold text-[#A3B1BD] cursor-not-allowed select-none"
+          className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold text-[#8FA0B0] cursor-not-allowed select-none"
         >
           <div className="flex items-center space-x-3 min-w-0">
-            <Icone className="w-4 h-4 flex-shrink-0 text-[#B4C0CB]" />
+            <Icone className="w-4 h-4 flex-shrink-0 text-[#6E8193]" />
             {!isCollapsed && <span className="truncate">{item.label}</span>}
           </div>
           {!isCollapsed && (
-            <span className="text-[9px] font-bold px-1.5 py-0.5 bg-[#F4F6F8] text-[#8995A1] border border-[#DDE3E8] rounded shrink-0">
+            <span className="text-[9px] font-bold px-1.5 py-0.5 bg-white/5 text-[#6E8193] border border-white/10 rounded shrink-0">
               Em breve
             </span>
           )}
@@ -226,14 +226,14 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
         title={isCollapsed ? (item.titulo || item.label) : undefined}
         aria-current={ativo ? 'page' : undefined}
         className={`relative w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-          ativo ? 'text-white shadow-xs' : 'text-[#17212B] hover:bg-[#F4F6F8]'
+          ativo ? 'text-white shadow-xs' : 'text-[#E8EEF3] hover:bg-white/5'
         }`}
         style={{
           backgroundColor: ativo ? companyColor : undefined,
           boxShadow: ativo ? theme.shadowLight : undefined,
         }}
       >
-        <Icone className={`w-4 h-4 flex-shrink-0 ${ativo ? 'text-white' : 'text-[#687582]'}`} />
+        <Icone className={`w-4 h-4 flex-shrink-0 ${ativo ? 'text-white' : 'text-[#93A4B5]'}`} />
         {!isCollapsed && <span className="truncate flex-1 text-left">{item.label}</span>}
         {!isCollapsed && !!item.badge && item.badge > 0 && (
           <span className={`ml-auto min-w-[20px] h-5 flex items-center justify-center px-1.5 text-[10px] font-bold rounded-full shrink-0 ${
@@ -251,9 +251,9 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
 
   const TituloSecao: React.FC<{ texto: string }> = ({ texto }) =>
     isCollapsed ? (
-      <div className="mx-3 my-1 border-t border-[#DDE3E8]" aria-hidden="true" />
+      <div className="mx-3 my-1 border-t border-white/10" aria-hidden="true" />
     ) : (
-      <span className="block px-3 text-[10px] font-bold uppercase tracking-wider text-[#8995A1] mb-2">
+      <span className="block px-3 text-[10px] font-bold uppercase tracking-wider text-[#6E8193] mb-2">
         {texto}
       </span>
     );
@@ -270,18 +270,18 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
 
       <aside
         id="app-left-sidebar"
-        className={`fixed top-0 bottom-0 left-0 z-50 bg-white text-[#17212B] flex flex-col border-r border-[#DDE3E8] transition-all duration-300 ease-in-out shadow-xs ${
+        className={`fixed top-0 bottom-0 left-0 z-50 bg-[#0B1220] text-[#E8EEF3] flex flex-col border-r border-white/10 transition-all duration-300 ease-in-out shadow-xs ${
           isCollapsed ? 'w-20' : 'w-64'
         } ${isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
       >
         {/* ── Marca ── */}
-        <div className="h-16 flex items-center justify-between px-4 border-b border-[#DDE3E8] bg-white">
+        <div className="h-16 flex items-center justify-between px-4 border-b border-white/10 bg-[#0B1220]">
           <button
             onClick={() => handleNavClick('dashboard')}
             className="flex items-center space-x-3 text-left focus:outline-none group overflow-hidden cursor-pointer"
           >
             {selectedEmpresa?.logoUrl ? (
-              <div className="w-10 h-10 rounded-xl overflow-hidden border border-[#DDE3E8] bg-white shadow-2xs flex-shrink-0 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl overflow-hidden border border-white/10 bg-[#0B1220] shadow-2xs flex-shrink-0 flex items-center justify-center">
                 <img src={selectedEmpresa.logoUrl} alt={selectedEmpresa.nome} className="w-full h-full object-cover" />
               </div>
             ) : (
@@ -296,7 +296,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
             {!isCollapsed && (
               <div className="leading-tight overflow-hidden">
                 <div className="flex items-center space-x-1.5">
-                  <span className="font-extrabold text-sm tracking-tight text-[#17212B]">ÍNTEGRA</span>
+                  <span className="font-extrabold text-sm tracking-tight text-[#E8EEF3]">ÍNTEGRA</span>
                   <span
                     className="text-[10px] font-bold px-1.5 py-0.2 border rounded"
                     style={{ backgroundColor: theme.bgLight, borderColor: theme.borderLight, color: companyColor }}
@@ -304,7 +304,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                     SaaS
                   </span>
                 </div>
-                <p className="text-[11px] text-[#687582] truncate">
+                <p className="text-[11px] text-[#93A4B5] truncate">
                   {selectedEmpresa ? selectedEmpresa.nome : 'Gestão Operacional'}
                 </p>
               </div>
@@ -314,14 +314,14 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
           <button
             onClick={onToggleCollapse}
             title={isCollapsed ? 'Expandir barra lateral' : 'Recolher barra lateral'}
-            className="hidden lg:flex p-1.5 rounded-lg text-[#687582] hover:text-[#17212B] hover:bg-[#F4F6F8] transition-colors focus:outline-none cursor-pointer"
+            className="hidden lg:flex p-1.5 rounded-lg text-[#93A4B5] hover:text-[#E8EEF3] hover:bg-white/5 transition-colors focus:outline-none cursor-pointer"
           >
             {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
           </button>
         </div>
 
         {/* ── Navegação ── */}
-        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-5 custom-scrollbar bg-white">
+        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-5 custom-scrollbar bg-[#0B1220]">
           <div className="space-y-1">
             <TituloSecao texto="Navegação" />
             {NAVEGACAO.map(item => <BotaoNav key={item.view} item={item} />)}
@@ -329,7 +329,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
 
           {/* Telas do módulo aberto — some quando está no dashboard */}
           {modulo && itensDoModulo.length > 0 && (
-            <div className="space-y-1 pt-1 border-t border-[#F0F3F5]">
+            <div className="space-y-1 pt-1 border-t border-white/5">
               <TituloSecao texto={modulo.titulo} />
               {itensDoModulo.map(item => <BotaoNav key={item.view} item={item} />)}
             </div>
@@ -337,9 +337,9 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
 
           {/* Módulo aberto ainda sem telas */}
           {modulo && itensDoModulo.length === 0 && !isCollapsed && (
-            <div className="pt-1 border-t border-[#F0F3F5]">
+            <div className="pt-1 border-t border-white/5">
               <TituloSecao texto={modulo.titulo} />
-              <p className="px-3 text-[11px] text-[#8995A1] leading-relaxed">
+              <p className="px-3 text-[11px] text-[#6E8193] leading-relaxed">
                 Módulo em desenvolvimento.
               </p>
             </div>
@@ -347,7 +347,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
 
           {/* Solicitações — liberado por permissão de cargo */}
           {verSolicitacoes && (
-            <div className="space-y-1 pt-2 border-t border-[#DDE3E8]">
+            <div className="space-y-1 pt-2 border-t border-white/10">
               {!isCollapsed ? (
                 <div className="flex items-center justify-between px-3 mb-2">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-[#D97706] flex items-center space-x-1">
@@ -371,10 +371,10 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
 
           {/* Painel Master — exclusivo do administrador geral */}
           {master && (
-            <div className="space-y-1 pt-2 border-t border-[#DDE3E8]">
+            <div className="space-y-1 pt-2 border-t border-white/10">
               {!isCollapsed ? (
                 <div className="flex items-center justify-between px-3 mb-2">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#176B87] flex items-center space-x-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#5FB8D0] flex items-center space-x-1">
                     <Crown className="w-3 h-3 text-amber-500" />
                     <span>Painel Master</span>
                   </span>
@@ -395,7 +395,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
         </nav>
 
         {/* ── Rodapé ── */}
-        <div className="p-3 border-t border-[#DDE3E8] bg-[#F8FAFB]">
+        <div className="p-3 border-t border-white/10 bg-[#0E1726]">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2.5 min-w-0">
               <div
@@ -406,8 +406,8 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
               </div>
               {!isCollapsed && (
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-[#17212B] truncate">{currentUser.name}</p>
-                  <div className="flex items-center space-x-1 text-[10px] text-[#687582]">
+                  <p className="text-xs font-semibold text-[#E8EEF3] truncate">{currentUser.name}</p>
+                  <div className="flex items-center space-x-1 text-[10px] text-[#93A4B5]">
                     <ShieldCheck className="w-3 h-3 text-[#159A72] flex-shrink-0" />
                     <span className="truncate">LGPD & SSL</span>
                   </div>
@@ -419,7 +419,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
               <button
                 onClick={onLogout}
                 title="Sair do sistema"
-                className="p-1.5 text-[#687582] hover:text-[#D64550] hover:bg-[#FDEBEC] rounded-lg transition-colors cursor-pointer"
+                className="p-1.5 text-[#93A4B5] hover:text-[#D64550] hover:bg-[#FDEBEC] rounded-lg transition-colors cursor-pointer"
               >
                 <LogOut className="w-4 h-4" />
               </button>

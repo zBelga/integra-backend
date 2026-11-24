@@ -1289,3 +1289,18 @@ export async function reativarColaborador(id: string): Promise<{ success: boolea
   if (!res.ok) throw new Error(json.error || 'Erro ao reativar o colaborador');
   return json;
 }
+
+export interface DashboardResumo {
+  empresas: number;
+  colaboradores_ativos: number;
+  permissoes_ativas: number;
+  sistema: 'operacional' | 'indisponivel';
+}
+
+/** Indicadores reais do Início (lidos do banco). */
+export async function fetchDashboardResumo(): Promise<{ success: boolean; data: DashboardResumo }> {
+  const res = await apiFetch('/api/dashboard/resumo');
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Erro ao carregar indicadores');
+  return json;
+}

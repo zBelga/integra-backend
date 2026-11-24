@@ -46,7 +46,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <>
-      <header className="bg-white border-b border-[#DDE3E8] text-[#17212B] sticky top-0 z-30 shadow-2xs">
+      <header className="bg-[#0B1220] border-b border-white/10 text-[#E8EEF3] sticky top-0 z-30 shadow-2xs">
         {/* Top micro brand color line */}
         {currentView === 'usuarios' ? (
           <div className="h-0.5 w-full bg-[#176B87]" />
@@ -62,7 +62,7 @@ export const Header: React.FC<HeaderProps> = ({
             {showMobileToggle && onToggleMobileMenu && currentView !== 'usuarios' && (
               <button
                 onClick={onToggleMobileMenu}
-                className="lg:hidden p-2 rounded-lg text-[#687582] hover:text-[#17212B] hover:bg-[#F4F6F8] focus:outline-none cursor-pointer"
+                className="lg:hidden p-2 rounded-lg text-[#93A4B5] hover:text-[#E8EEF3] hover:bg-white/5 focus:outline-none cursor-pointer"
                 title="Abrir menu lateral"
               >
                 <Menu className="w-5 h-5" />
@@ -79,12 +79,12 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
                 <div>
                   <div className="flex items-center space-x-2">
-                    <span className="font-extrabold text-base sm:text-lg tracking-tight text-[#17212B]">ÍNTEGRA</span>
-                    <span className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded border bg-[#E8F3F6] border-[#C6E3EB] text-[#176B87] flex items-center space-x-1">
+                    <span className="font-extrabold text-base sm:text-lg tracking-tight text-[#E8EEF3]">ÍNTEGRA</span>
+                    <span className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded border bg-[#E8F3F6] border-white/10 text-[#5FB8D0] flex items-center space-x-1">
                       <span>PAINEL MASTER</span>
                     </span>
                   </div>
-                  <p className="text-[11px] text-[#687582] hidden sm:block">Gestão Global Multi-Empresas</p>
+                  <p className="text-[11px] text-[#93A4B5] hidden sm:block">Gestão Global Multi-Empresas</p>
                 </div>
               </div>
             ) : (
@@ -93,7 +93,7 @@ export const Header: React.FC<HeaderProps> = ({
                 className="flex items-center space-x-3 cursor-pointer group"
               >
                 {selectedEmpresa?.logoUrl ? (
-                  <div className="w-10 h-10 rounded-xl overflow-hidden border border-[#DDE3E8] bg-white shadow-2xs flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-xl overflow-hidden border border-white/10 bg-[#0B1220] shadow-2xs flex items-center justify-center">
                     <img 
                       src={selectedEmpresa.logoUrl} 
                       alt={selectedEmpresa.nome} 
@@ -110,7 +110,7 @@ export const Header: React.FC<HeaderProps> = ({
                 )}
                 <div>
                   <div className="flex items-center space-x-2">
-                    <span className="font-extrabold text-base sm:text-lg tracking-tight text-[#17212B]">ÍNTEGRA</span>
+                    <span className="font-extrabold text-base sm:text-lg tracking-tight text-[#E8EEF3]">ÍNTEGRA</span>
                     <span 
                       className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded border"
                       style={{
@@ -122,7 +122,7 @@ export const Header: React.FC<HeaderProps> = ({
                       {selectedEmpresa ? selectedEmpresa.nome.split(' ')[0].toUpperCase() : 'EMPRESARIAL'}
                     </span>
                   </div>
-                  <p className="text-[11px] text-[#687582] hidden sm:block">Gestão Operacional & RH</p>
+                  <p className="text-[11px] text-[#93A4B5] hidden sm:block">Gestão Operacional & RH</p>
                 </div>
               </div>
             )}
@@ -135,10 +135,10 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 id="header-btn-ir-empresas"
                 onClick={() => onNavigate('empresas')}
-                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border border-[#DDE3E8] bg-[#F8FAFB] hover:bg-white text-xs font-bold text-[#17212B] transition-all cursor-pointer shadow-2xs"
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border border-white/10 bg-[#0E1726] hover:bg-[#0B1220] text-xs font-bold text-[#E8EEF3] transition-all cursor-pointer shadow-2xs"
                 title="Ir para tela de seleção de empresas"
               >
-                <Building2 className="w-3.5 h-3.5 text-[#176B87]" />
+                <Building2 className="w-3.5 h-3.5 text-[#5FB8D0]" />
                 <span className="hidden sm:inline">Painel de Empresas</span>
                 <span className="sm:hidden">Empresas</span>
               </button>
@@ -148,11 +148,11 @@ export const Header: React.FC<HeaderProps> = ({
             {currentView !== 'usuarios' && selectedEmpresa && onSwitchEmpresa && (
               <button
                 onClick={onSwitchEmpresa}
-                className="flex items-center space-x-2 bg-[#F8FAFB] hover:bg-white px-3 py-1.5 rounded-xl border border-[#DDE3E8] text-left transition-all focus:outline-none group cursor-pointer shadow-2xs hover:shadow-xs"
+                className="flex items-center space-x-2 bg-[#0E1726] hover:bg-[#0B1220] px-3 py-1.5 rounded-xl border border-white/10 text-left transition-all focus:outline-none group cursor-pointer shadow-2xs hover:shadow-xs"
                 title="Clique para trocar de empresa"
               >
                 {selectedEmpresa.logoUrl ? (
-                  <div className="w-6 h-6 rounded-lg overflow-hidden border border-[#DDE3E8] bg-white flex-shrink-0 flex items-center justify-center">
+                  <div className="w-6 h-6 rounded-lg overflow-hidden border border-white/10 bg-[#0B1220] flex-shrink-0 flex items-center justify-center">
                     <img 
                       src={selectedEmpresa.logoUrl} 
                       alt={selectedEmpresa.nome} 
@@ -168,8 +168,8 @@ export const Header: React.FC<HeaderProps> = ({
                   </div>
                 )}
                 <div className="hidden md:block max-w-[160px] truncate">
-                  <p className="text-[10px] text-[#687582] font-semibold uppercase leading-none">Empresa Ativa</p>
-                  <p className="text-xs font-bold text-[#17212B] truncate mt-0.5">
+                  <p className="text-[10px] text-[#93A4B5] font-semibold uppercase leading-none">Empresa Ativa</p>
+                  <p className="text-xs font-bold text-[#E8EEF3] truncate mt-0.5">
                     {selectedEmpresa.nome}
                   </p>
                 </div>
@@ -184,7 +184,7 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="relative">
               <button
                 onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                className="flex items-center space-x-2.5 border-l border-[#DDE3E8] pl-3 sm:pl-4 focus:outline-none group text-left cursor-pointer"
+                className="flex items-center space-x-2.5 border-l border-white/10 pl-3 sm:pl-4 focus:outline-none group text-left cursor-pointer"
               >
                 <div 
                   className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-2xs transition-opacity group-hover:opacity-90"
@@ -193,10 +193,10 @@ export const Header: React.FC<HeaderProps> = ({
                   {getInitials(currentUser.name)}
                 </div>
                 <div className="hidden sm:block text-left">
-                  <p className="text-xs font-semibold text-[#17212B]">{currentUser.name}</p>
-                  <p className="text-[10px] text-[#687582] truncate max-w-[130px]">{currentUser.role}</p>
+                  <p className="text-xs font-semibold text-[#E8EEF3]">{currentUser.name}</p>
+                  <p className="text-[10px] text-[#93A4B5] truncate max-w-[130px]">{currentUser.role}</p>
                 </div>
-                <ChevronDown className="w-3.5 h-3.5 text-[#687582] group-hover:text-[#17212B] transition-transform" />
+                <ChevronDown className="w-3.5 h-3.5 text-[#93A4B5] group-hover:text-[#E8EEF3] transition-transform" />
               </button>
 
               {/* User Dropdown Menu */}
@@ -206,10 +206,10 @@ export const Header: React.FC<HeaderProps> = ({
                     className="fixed inset-0 z-40"
                     onClick={() => setIsUserMenuOpen(false)} 
                   />
-                  <div className="absolute right-0 mt-2 w-64 bg-white border border-[#DDE3E8] rounded-2xl shadow-xl py-2 z-50 animate-in fade-in duration-150">
-                    <div className="px-4 py-2.5 border-b border-[#DDE3E8] bg-[#F8FAFB]">
-                      <p className="text-xs font-bold text-[#17212B] truncate">{currentUser.name}</p>
-                      <p className="text-[11px] text-[#687582] truncate font-mono">{currentUser.email}</p>
+                  <div className="absolute right-0 mt-2 w-64 bg-[#0B1220] border border-white/10 rounded-2xl shadow-xl py-2 z-50 animate-in fade-in duration-150">
+                    <div className="px-4 py-2.5 border-b border-white/10 bg-[#0E1726]">
+                      <p className="text-xs font-bold text-[#E8EEF3] truncate">{currentUser.name}</p>
+                      <p className="text-[11px] text-[#93A4B5] truncate font-mono">{currentUser.email}</p>
                       <div className="flex items-center space-x-1.5 mt-1.5">
                         <span 
                           className="px-2 py-0.5 rounded text-[10px] font-bold border"
@@ -227,14 +227,14 @@ export const Header: React.FC<HeaderProps> = ({
                       </div>
                     </div>
 
-                    <div className="p-2 border-b border-[#DDE3E8] space-y-1">
+                    <div className="p-2 border-b border-white/10 space-y-1">
                       {currentUser.email.toLowerCase() === 'fabriciooliveira2431@gmail.com' && (
                         <button
                           onClick={() => {
                             setIsUserMenuOpen(false);
                             onNavigate('usuarios');
                           }}
-                          className="w-full px-3 py-2 text-left text-xs font-bold text-[#176B87] hover:bg-[#E8F3F6] rounded-xl flex items-center justify-between transition-colors cursor-pointer"
+                          className="w-full px-3 py-2 text-left text-xs font-bold text-[#5FB8D0] hover:bg-white/5 rounded-xl flex items-center justify-between transition-colors cursor-pointer"
                         >
                           <div className="flex items-center space-x-2">
                             <Crown className="w-3.5 h-3.5 text-amber-500" />

@@ -1,6 +1,7 @@
 import express from 'express';
 import path from 'path';
 import admissoesRouter  from './routes/admissoes.js';
+import dashboardRouter  from './routes/dashboard.js';
 import obrasRouter      from './routes/obras.js';
 import supabaseRouter   from './routes/supabase.js';
 import usuariosRouter   from './routes/usuarios.js';
@@ -72,6 +73,7 @@ async function startServer() {
 
   // ── Rotas protegidas por JWT ──
   app.use('/api/admissoes',     requireAuth, admissoesRouter);
+  app.use('/api/dashboard',     requireAuth, dashboardRouter);
   app.use('/api/obras',         requireAuth, obrasRouter);
   app.use('/api/usuarios',      requireAuth, usuariosRouter);
   app.use('/api/cargos',        requireAuth, cargosRouter);
