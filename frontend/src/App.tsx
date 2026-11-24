@@ -285,6 +285,12 @@ export default function App() {
 
   const isSidebarVisible = currentView !== 'empresas' && currentView !== 'usuarios';
 
+  // Início é escuro; o resto do sistema segue claro
+  useEffect(() => {
+    document.body.style.backgroundColor = currentView === 'dashboard' ? '#0B1220' : '';
+    return () => { document.body.style.backgroundColor = ''; };
+  }, [currentView]);
+
   if (!isAuthenticated) {
     return (
       <>
@@ -318,7 +324,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F4F6F8] flex text-[#17212B] font-sans antialiased">
+    <div className={`min-h-screen flex font-sans antialiased ${currentView === 'dashboard' ? 'bg-[#0B1220] text-[#E8EEF3]' : 'bg-[#F4F6F8] text-[#17212B]'}`}>
       {isSidebarVisible && (
         <LeftSidebar
           currentView={currentView}

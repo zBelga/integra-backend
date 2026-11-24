@@ -1,6 +1,6 @@
 import React from 'react';
 import { useEffect, useState } from 'react';
-import { ArrowRight, Lock, RefreshCw, Crown, ShieldCheck, Sliders, FolderOpen, HardHat, Package, Users, Building2, Activity, Shield } from 'lucide-react';
+import { ArrowRight, Lock, Sliders, FolderOpen, HardHat, Package, Users, Building2, Activity, Shield } from 'lucide-react';
 import { fetchDashboardResumo, type DashboardResumo } from '../../services/api';
 import { ActiveView, ChaveModulo, Empresa } from '../../types';
 import { moduloVisivel, podeNaTela } from '../../utils/permissoes';
@@ -87,8 +87,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
   currentUser,
   permissoes,
 }) => {
-  const companyColor = selectedEmpresa?.corPrimaria || '#176B87';
-  const isMasterAdmin = !!permissoes?.master;
 
   // Indicadores reais, vindos do banco (nada fixo)
   const [resumo, setResumo] = useState<DashboardResumo | null>(null);
@@ -177,75 +175,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
         </div>
       </section>
-
-      {/* Empresa ativa */}
-      {selectedEmpresa && (
-        <div className="rounded-2xl border border-white/10 bg-[#0E1726] p-5 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-4 min-w-0">
-            {selectedEmpresa.logoUrl ? (
-              <div className="w-12 h-12 rounded-xl overflow-hidden bg-white flex-shrink-0 flex items-center justify-center">
-                <img src={selectedEmpresa.logoUrl} alt={selectedEmpresa.nome} className="w-full h-full object-cover" />
-              </div>
-            ) : (
-              <div
-                className="w-12 h-12 rounded-xl flex items-center justify-center font-extrabold text-white text-sm flex-shrink-0"
-                style={{ backgroundColor: companyColor }}
-              >
-                {selectedEmpresa.nome.substring(0, 2).toUpperCase()}
-              </div>
-            )}
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-base font-bold truncate">{selectedEmpresa.nome}</h2>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#10B981]/15 text-[#10B981] border border-[#10B981]/30">
-                  {(selectedEmpresa.status || 'ativa').toUpperCase()}
-                </span>
-              </div>
-              <p className="text-xs text-[#93A4B5] mt-0.5 font-mono truncate">
-                CNPJ: {selectedEmpresa.cnpj} • {selectedEmpresa.segmento}
-              </p>
-            </div>
-          </div>
-          {onSwitchEmpresa && (
-            <button
-              onClick={onSwitchEmpresa}
-              className="px-3.5 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-[#E8EEF3] rounded-xl text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer"
-            >
-              <RefreshCw className="w-3.5 h-3.5" style={{ color: companyColor }} />
-              <span>Trocar de Empresa</span>
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Painel Master */}
-      {isMasterAdmin && (
-        <div
-          onClick={() => onSelectModule('usuarios')}
-          className="group rounded-2xl border border-white/10 bg-[#0E1726] hover:border-[#F97316]/40 p-5 sm:p-6 transition-colors cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-        >
-          <div className="flex items-center gap-4">
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-amber-400/15 text-amber-300 flex-shrink-0">
-              <Crown className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-bold">Gestão de Usuários & Vínculos</h3>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#10B981]/15 text-[#10B981] border border-[#10B981]/30 flex items-center gap-1">
-                  <ShieldCheck className="w-3 h-3" /> MASTER
-                </span>
-              </div>
-              <p className="text-xs text-[#93A4B5] mt-1">
-                Crie usuários, defina credenciais e vincule cada colaborador à sua empresa.
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 text-xs font-bold text-[#F97316]">
-            <span>Gerenciar usuários</span>
-            <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-          </div>
-        </div>
-      )}
 
       {/* Módulos do sistema: ao clicar, a lateral mostra as telas daquele módulo */}
       <section id="modulos-sistema" className="space-y-4 scroll-mt-24">
