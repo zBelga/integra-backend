@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { UserPlus, Search, Building, X, Download, Upload, Loader2, Send, ShieldCheck, Users, ClipboardList, UserCheck, ChevronDown } from 'lucide-react';
+import { UserPlus, Search, Building, X, Download, Upload, Loader2, Send, ShieldCheck, Users, ClipboardList, UserCheck, ChevronDown, Archive, RotateCcw } from 'lucide-react';
 import { ActiveView, Admissao, AdmissaoFilterState, AdmissaoFormData, DiaDeContratacao, Empresa, Obra, PaginationMeta } from '../../types';
-import { fetchAdmissoes, createAdmissao, updateAdmissao, deleteAdmissao, fetchObras, createObra, updateObra, deleteObra, fetchSolicitacoesStats, contratarAdmissao, fetchDiasDeContratacao } from '../../services/api';
+import { fetchAdmissoes, createAdmissao, updateAdmissao, deleteAdmissao, fetchObras, createObra, updateObra, deleteObra, fetchSolicitacoesStats, contratarAdmissao, fetchDiasDeContratacao, fetchContratadosFinalizados, finalizarContratadosDia, reabrirContratadosDia, DiaFinalizado } from '../../services/api';
 import { podeNaTela, podeExtra, ehMaster } from '../../utils/permissoes';
 import { useDebounce } from '../../utils/debounce';
 import { AdmissaoTable } from './AdmissaoTable';
@@ -93,6 +93,8 @@ export const AdministrativoView: React.FC<AdministrativoViewProps> = ({
   const [abaAtiva, setAbaAtiva] = useState<string>('abertas');
   const [diasContratacao, setDiasContratacao] = useState<DiaDeContratacao[]>([]);
   const [verTodosOsDias, setVerTodosOsDias] = useState(false);
+  const [finalizados, setFinalizados] = useState<DiaFinalizado[]>([]);
+  const [mostrarFinalizados, setMostrarFinalizados] = useState(false);
 
   // Excel Import / Export states
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -151,7 +153,34 @@ export const AdministrativoView: React.FC<AdministrativoViewProps> = ({
     } catch {
       /* a aba de dias é um extra: falha aqui não atrapalha as admissões */
     }
+    try {
+      const fin = await fetchContratadosFinalizados();
+      if (fin.success) setFinalizados(fin.data || []);
+    } catch {
+      /* lista de finalizadas é um extra */
+    }
   }, []);
+
+  const handleFinalizarDia = async (dia: string) => {
+    try {
+      await finalizarContratadosDia(dia);
+      setAbaAtiva('abertas');
+      await loadDiasContratacao();
+      onShowToast({ id: Date.now().toString(), type: 'success', message: 'Aba finalizada. As pessoas continuam no Efetivo.' });
+    } catch (err: any) {
+      onShowToast({ id: Date.now().toString(), type: 'error', message: err.message || 'Erro ao finalizar a aba.' });
+    }
+  };
+
+  const handleReabrirDia = async (dia: string) => {
+    try {
+      await reabrirContratadosDia(dia);
+      await loadDiasContratacao();
+      onShowToast({ id: Date.now().toString(), type: 'success', message: 'Aba reaberta.' });
+    } catch (err: any) {
+      onShowToast({ id: Date.now().toString(), type: 'error', message: err.message || 'Erro ao reabrir a aba.' });
+    }
+  };
 
   // Load pending requests count for badge
   const loadPendingStats = useCallback(async () => {
@@ -511,6 +540,16 @@ export const AdministrativoView: React.FC<AdministrativoViewProps> = ({
             );
           })}
 
+          {finalizados.length > 0 && (
+            <button
+              onClick={() => setMostrarFinalizados((v) => !v)}
+              className="flex items-center gap-1.5 px-3 py-2.5 text-xs font-semibold text-[#687582] hover:text-[#17212B] whitespace-nowrap cursor-pointer"
+            >
+              <Archive className="w-3.5 h-3.5" />
+              Finalizadas ({finalizados.length})
+            </button>
+          )}
+
           {diasContratacao.length > 7 && (
             <button
               onClick={() => setVerTodosOsDias((v) => !v)}
@@ -522,12 +561,41 @@ export const AdministrativoView: React.FC<AdministrativoViewProps> = ({
           )}
         </div>
 
+        {mostrarFinalizados && finalizados.length > 0 && (
+          <div className="bg-white border border-[#DDE3E8] rounded-2xl overflow-hidden">
+            <div className="px-5 py-3 border-b border-[#DDE3E8] text-xs font-bold text-[#17212B]">
+              Abas finalizadas
+              <span className="font-normal text-[#687582]"> · os colaboradores continuam no Efetivo</span>
+            </div>
+            {finalizados.map((f) => {
+              const [ano, mes, dia] = f.data.split('-');
+              return (
+                <div key={f.data} className="px-5 py-3 flex flex-wrap items-center justify-between gap-3 border-b border-[#EEF1F4] last:border-b-0">
+                  <div className="text-xs text-[#17212B]">
+                    <span className="font-semibold">Contratados em {dia}/{mes}/{ano}</span>
+                    <span className="text-[#687582]"> · {f.total} {f.total === 1 ? 'pessoa' : 'pessoas'}</span>
+                  </div>
+                  {podeEditarAdmissao && (
+                    <button
+                      onClick={() => handleReabrirDia(f.data)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 border border-[#DDE3E8] hover:border-[#B6C2CC] rounded-lg text-xs font-semibold text-[#17212B] cursor-pointer"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" /> Reabrir
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         {abaAtiva !== 'abertas' ? (
           <ContratadosDoDia
             data={abaAtiva}
             corEmpresa={companyColor}
             onVerNoEfetivo={onNavigate ? () => onNavigate('efetivo') : undefined}
             onVerDocumentos={podeVerDocumentos && onAbrirDocumentos ? onAbrirDocumentos : undefined}
+            onFinalizar={podeEditarAdmissao ? () => handleFinalizarDia(abaAtiva) : undefined}
           />
         ) : (
         <>

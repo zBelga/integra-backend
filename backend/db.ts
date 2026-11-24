@@ -216,6 +216,20 @@ async function getDbSqlite(): Promise<Database> {
   // Permissões por tela (modelo novo: módulo → tela → ações)
   try {
     db.run(`
+      CREATE TABLE IF NOT EXISTS contratacoes_finalizadas (
+        empresa_id TEXT NOT NULL,
+        data TEXT NOT NULL,
+        finalizado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+        finalizado_por TEXT DEFAULT '',
+        PRIMARY KEY (empresa_id, data)
+      )
+    `);
+  } catch (err) {
+    console.warn('[DB] Não foi possível criar contratacoes_finalizadas:', (err as any)?.message);
+  }
+
+  try {
+    db.run(`
       CREATE TABLE IF NOT EXISTS cargos_telas (
         id TEXT PRIMARY KEY,
         empresa_id TEXT NOT NULL,

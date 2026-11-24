@@ -36,11 +36,111 @@ router.get('/contratados/resumo', exigirTela('administrativo.admissoes', 'ver'),
       return res.json({ success: true, data: [] });
     }
 
+    // Dias finalizados somem da barra de abas. Os colaboradores continuam no efetivo.
+    const finalizados = await diasFinalizados(empresa_id);
     const data = linhas
       .map(l => ({ data: String(l.data).slice(0, 10), total: Number(l.total) || 0 }))
+      .filter(l => !finalizados.has(l.data))
       .sort((a, b) => b.data.localeCompare(a.data));
 
     res.json({ success: true, data });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/** Datas de contratação já finalizadas da empresa. Se a tabela ainda não existe, nenhuma. */
+async function diasFinalizados(empresa_id: string): Promise<Set<string>> {
+  try {
+    const rows = (await queryRows(
+      'SELECT data FROM contratacoes_finalizadas WHERE empresa_id = ?',
+      [empresa_id]
+    )) as any[];
+    return new Set(rows.map(r => String(r.data).slice(0, 10)));
+  } catch {
+    return new Set();
+  }
+}
+
+/**
+ * GET /api/admissoes/contratados/finalizados
+ * Dias que o usuário finalizou, para poder reabrir. Não altera nenhum colaborador.
+ */
+router.get('/contratados/finalizados', exigirTela('administrativo.admissoes', 'ver'), async (req: Request, res: Response) => {
+  try {
+    const empresa_id = empresaDoPedido(req);
+    let linhas: any[] = [];
+    try {
+      linhas = (await queryRows(
+        `SELECT f.data, f.finalizado_em, f.finalizado_por,
+                (SELECT COUNT(*) FROM colaboradores c
+                  WHERE c.empresa_id = f.empresa_id AND c.contratado_em = f.data) AS total
+           FROM contratacoes_finalizadas f
+          WHERE f.empresa_id = ?
+          ORDER BY f.data DESC`,
+        [empresa_id]
+      )) as any[];
+    } catch {
+      return res.json({ success: true, data: [] });
+    }
+    res.json({
+      success: true,
+      data: linhas.map(l => ({
+        data: String(l.data).slice(0, 10),
+        finalizado_em: l.finalizado_em || '',
+        finalizado_por: l.finalizado_por || '',
+        total: Number(l.total) || 0,
+      })),
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/admissoes/contratados/finalizar  — body { data: AAAA-MM-DD }
+ * Só esconde a aba daquele dia. Nenhum colaborador, documento ou admissão é alterado.
+ */
+router.post('/contratados/finalizar', exigirTela('administrativo.admissoes', 'editar'), async (req: Request, res: Response) => {
+  try {
+    const empresa_id = empresaDoPedido(req);
+    const dia = String(req.body?.data || '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dia)) {
+      return res.status(400).json({ success: false, error: 'Informe a data no formato AAAA-MM-DD.' });
+    }
+    const ja = await queryRows(
+      'SELECT data FROM contratacoes_finalizadas WHERE empresa_id = ? AND data = ?',
+      [empresa_id, dia]
+    );
+    if (ja.length === 0) {
+      await executeQuery(
+        `INSERT INTO contratacoes_finalizadas (empresa_id, data, finalizado_em, finalizado_por)
+         VALUES (?, ?, CURRENT_TIMESTAMP, ?)`,
+        [empresa_id, dia, req.user?.nome || '']
+      );
+    }
+    res.json({ success: true, message: 'Aba finalizada. Os colaboradores continuam no efetivo.' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/admissoes/contratados/reabrir  — body { data: AAAA-MM-DD }
+ * Remove só a marca de "finalizada": a aba volta. Não apaga nada de colaborador.
+ */
+router.post('/contratados/reabrir', exigirTela('administrativo.admissoes', 'editar'), async (req: Request, res: Response) => {
+  try {
+    const empresa_id = empresaDoPedido(req);
+    const dia = String(req.body?.data || '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dia)) {
+      return res.status(400).json({ success: false, error: 'Informe a data no formato AAAA-MM-DD.' });
+    }
+    await executeQuery(
+      'DELETE FROM contratacoes_finalizadas WHERE empresa_id = ? AND data = ?',
+      [empresa_id, dia]
+    );
+    res.json({ success: true, message: 'Aba reaberta.' });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }

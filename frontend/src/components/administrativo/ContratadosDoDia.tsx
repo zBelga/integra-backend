@@ -21,9 +21,11 @@ interface Props {
   onVerNoEfetivo?: (colaborador: Colaborador) => void;
   /** Navega para a tela de documentos do colaborador (por id). Só aparece se o usuário tem permissão. */
   onVerDocumentos?: (colaboradorId: string) => void;
+  /** Quando informado, mostra o botão para finalizar (esconder) esta aba */
+  onFinalizar?: () => void;
 }
 
-export const ContratadosDoDia: React.FC<Props> = ({ data, corEmpresa, onVerNoEfetivo, onVerDocumentos }) => {
+export const ContratadosDoDia: React.FC<Props> = ({ data, corEmpresa, onVerNoEfetivo, onVerDocumentos, onFinalizar }) => {
   const [lista, setLista] = useState<Colaborador[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [erro, setErro] = useState('');
@@ -81,13 +83,27 @@ export const ContratadosDoDia: React.FC<Props> = ({ data, corEmpresa, onVerNoEfe
             </p>
           </div>
         </div>
-        <button
-          onClick={exportar}
-          disabled={isLoading || lista.length === 0}
-          className="flex items-center gap-1.5 px-3.5 py-2 border border-[#DDE3E8] hover:border-[#B6C2CC] rounded-xl text-xs font-semibold text-[#17212B] transition-colors cursor-pointer disabled:opacity-40"
-        >
-          <Download className="w-3.5 h-3.5" /> Exportar lista
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={exportar}
+            disabled={isLoading || lista.length === 0}
+            className="flex items-center gap-1.5 px-3.5 py-2 border border-[#DDE3E8] hover:border-[#B6C2CC] rounded-xl text-xs font-semibold text-[#17212B] transition-colors cursor-pointer disabled:opacity-40"
+          >
+            <Download className="w-3.5 h-3.5" /> Exportar lista
+          </button>
+          {onFinalizar && (
+            <button
+              onClick={() => {
+                if (window.confirm(
+                  'Finalizar esta aba?\n\nEla some da barra de abas. As pessoas continuam no Efetivo, com os documentos. Nada é apagado, e a aba pode ser reaberta pelo botão "Finalizadas".'
+                )) onFinalizar();
+              }}
+              className="flex items-center gap-1.5 px-3.5 py-2 border border-[#DDE3E8] hover:border-[#B6C2CC] rounded-xl text-xs font-semibold text-[#17212B] transition-colors cursor-pointer"
+            >
+              Finalizar aba
+            </button>
+          )}
+        </div>
       </div>
 
       {erro && (

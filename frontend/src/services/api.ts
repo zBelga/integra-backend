@@ -764,6 +764,43 @@ export async function fetchDiasDeContratacao(): Promise<{
 }
 
 /** Quem foi contratado num dia. Só leitura: os dados moram no efetivo. */
+export interface DiaFinalizado {
+  data: string;
+  finalizado_em: string;
+  finalizado_por: string;
+  total: number;
+}
+
+/** Dias de contratação que foram finalizados (abas escondidas, mas nada apagado). */
+export async function fetchContratadosFinalizados(): Promise<{ success: boolean; data: DiaFinalizado[] }> {
+  const res = await apiFetch('/api/admissoes/contratados/finalizados');
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Erro ao carregar as abas finalizadas');
+  return json;
+}
+
+/** Esconde a aba do dia. Os colaboradores continuam no efetivo, com documentos. */
+export async function finalizarContratadosDia(data: string): Promise<{ success: boolean; message?: string }> {
+  const res = await apiFetch('/api/admissoes/contratados/finalizar', {
+    method: 'POST',
+    body: JSON.stringify({ data }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Não foi possível finalizar a aba');
+  return json;
+}
+
+/** Volta a aba de um dia finalizado. */
+export async function reabrirContratadosDia(data: string): Promise<{ success: boolean; message?: string }> {
+  const res = await apiFetch('/api/admissoes/contratados/reabrir', {
+    method: 'POST',
+    body: JSON.stringify({ data }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Não foi possível reabrir a aba');
+  return json;
+}
+
 export async function fetchContratadosDoDia(
   data: string
 ): Promise<{ success: boolean; data: import('../types').Colaborador[] }> {
