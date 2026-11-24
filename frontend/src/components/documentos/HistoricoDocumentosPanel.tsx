@@ -40,6 +40,7 @@ const ACOES: Record<string, { rotulo: string; cor: string; fundo: string; Icone:
   substituido: { rotulo: 'Substituído', cor: '#A9690A', fundo: '#FEF3E0', Icone: RefreshCw },
   excluido:    { rotulo: 'Excluído',    cor: '#A8323C', fundo: '#FDEBEC', Icone: Trash2 },
   restaurado:  { rotulo: 'Restaurado',  cor: '#0F7A5A', fundo: '#E8F6F1', Icone: RotateCcw },
+  apagado_automaticamente: { rotulo: 'Arquivo apagado (30 dias)', cor: '#6B7280', fundo: '#F1F3F5', Icone: Trash2 },
 };
 
 function dataHora(iso?: string | null): string {

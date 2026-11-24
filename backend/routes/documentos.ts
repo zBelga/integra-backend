@@ -1285,7 +1285,7 @@ router.post('/:id/restaurar', async (req: Request, res: Response) => {
 
     const { data: doc } = await supabase
       .from('documentos')
-      .select('id, empresa_id, colaborador_id, status, nome, tipo')
+      .select('id, empresa_id, colaborador_id, status, nome, tipo, excluido_em')
       .eq('id', req.params.id)
       .maybeSingle();
 
@@ -1300,6 +1300,12 @@ router.post('/:id/restaurar', async (req: Request, res: Response) => {
     }
     if (doc.status !== 'excluido') {
       return res.status(400).json({ success: false, error: 'Só documentos excluídos podem ser restaurados.' });
+    }
+    if (doc.excluido_em && new Date(doc.excluido_em).getTime() < Date.now() - PRAZO_RESTAURAR_DIAS * 86400000) {
+      return res.status(400).json({
+        success: false,
+        error: `O prazo de ${PRAZO_RESTAURAR_DIAS} dias para restaurar expirou. O arquivo foi apagado; o histórico de quem excluiu fica registrado.`,
+      });
     }
 
     const { error } = await supabase
@@ -1329,3 +1335,52 @@ router.post('/:id/restaurar', async (req: Request, res: Response) => {
 });
 
 export default router;
+
+/** Prazo para restaurar um documento excluído. Depois disso, o arquivo é apagado. */
+export const PRAZO_RESTAURAR_DIAS = 30;
+
+/**
+ * Limpeza automática: apaga do Storage os arquivos de documentos excluídos há
+ * mais de 30 dias e remove o registro. O histórico (documento_historico) não é
+ * apagado: fica o registro de quem fez o quê.
+ * Não toca em documentos ativos nem nos substituídos.
+ */
+export async function purgarDocumentosExcluidos(): Promise<number> {
+  const sb = getSupabase();
+  const limite = new Date(Date.now() - PRAZO_RESTAURAR_DIAS * 86400000).toISOString();
+
+  const { data: docs, error } = await sb
+    .from('documentos')
+    .select('id, empresa_id, colaborador_id, storage_path, nome, tipo, excluido_por, excluido_em')
+    .eq('status', 'excluido')
+    .lt('excluido_em', limite)
+    .limit(200);
+  if (error) throw error;
+
+  let apagados = 0;
+  for (const doc of docs || []) {
+    if (doc.storage_path) {
+      const { error: remErr } = await sb.storage.from('documentos').remove([doc.storage_path]);
+      if (remErr) {
+        console.error(`[limpeza] não consegui apagar o arquivo ${doc.storage_path}:`, remErr.message);
+        continue; // mantém o registro para tentar de novo na próxima rodada
+      }
+    }
+
+    await sb.from('documento_historico').insert({
+      empresa_id: doc.empresa_id,
+      entidade: 'documento',
+      entidade_id: doc.id,
+      documento_id: doc.id,
+      colaborador_id: doc.colaborador_id,
+      acao: 'apagado_automaticamente',
+      usuario_id: 'sistema',
+      usuario_nome: 'Limpeza automática',
+      detalhes: `${doc.tipo} — "${doc.nome}" · excluído por ${doc.excluido_por || '—'} · arquivo apagado após ${PRAZO_RESTAURAR_DIAS} dias`,
+    });
+
+    const { error: delErr } = await sb.from('documentos').delete().eq('id', doc.id);
+    if (!delErr) apagados++;
+  }
+  return apagados;
+}

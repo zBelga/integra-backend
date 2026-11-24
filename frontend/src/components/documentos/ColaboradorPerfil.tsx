@@ -39,6 +39,7 @@ import {
   Layers,
   ChevronLeft,
   Send,
+  Loader2,
 } from 'lucide-react';
 import { UploadDocumentoModal } from './UploadDocumentoModal';
 import { AnexarLoteModal } from './AnexarLoteModal';
@@ -644,9 +645,12 @@ export const ColaboradorPerfil: React.FC<ColaboradorPerfilProps> = ({
 
           <div className="p-4 grid grid-cols-[repeat(auto-fill,minmax(94px,1fr))] gap-3">
             {isLoading
-              ? Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="h-[132px] rounded-xl bg-white/70 border border-[#E1D9FB] doc-pulso" />
-                ))
+              ? (
+                  <div className="col-span-full flex flex-col items-center justify-center gap-2 py-10 text-[#687582]" role="status" aria-live="polite">
+                    <Loader2 className="w-6 h-6 animate-spin text-[#7C3AED]" />
+                    <span className="text-xs font-semibold">Carregando documentos…</span>
+                  </div>
+                )
               : obrigatoriosVisiveis.map(item => {
                   const Icone = iconeDoTipo(item.codigo);
                   const e = ESTILO_SITUACAO[item.situacao];

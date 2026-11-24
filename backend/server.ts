@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'path';
 import admissoesRouter  from './routes/admissoes.js';
 import dashboardRouter  from './routes/dashboard.js';
+import { purgarDocumentosExcluidos } from './routes/documentos.js';
 import obrasRouter      from './routes/obras.js';
 import supabaseRouter   from './routes/supabase.js';
 import usuariosRouter   from './routes/usuarios.js';
@@ -118,6 +119,16 @@ async function startServer() {
     console.log(`   Modo: ${API_ONLY ? 'API-ONLY (frontend separado)' : 'DEV (Vite integrado)'}`);
     console.log(`   CORS liberado para: ${process.env.CORS_ORIGINS || '(nenhuma origem; só localhost)'}`);
   });
+
+  // Limpeza dos documentos excluídos há mais de 30 dias (só no modo Supabase)
+  if (process.env.DB_MODE === 'supabase') {
+    const rodarLimpeza = () =>
+      purgarDocumentosExcluidos()
+        .then(n => { if (n > 0) console.log(`[limpeza] ${n} documento(s) excluído(s) há mais de 30 dias foram apagados`); })
+        .catch(err => console.error('[limpeza] falhou:', err?.message || err));
+    setTimeout(rodarLimpeza, 60_000);
+    setInterval(rodarLimpeza, 6 * 60 * 60 * 1000);
+  }
 }
 
 startServer().catch((err) => {
