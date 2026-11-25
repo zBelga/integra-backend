@@ -16,10 +16,11 @@ import { podeNaTela } from '../../utils/permissoes';
 import { FichaEpiView } from './FichaEpiView';
 import { KitsEpiView } from './KitsEpiView';
 import { RelatorioAtividadesView } from './RelatorioAtividadesView';
+import { MovimentacaoPessoalView } from './MovimentacaoPessoalView';
 
 const TELA = 'seguranca.epis';
 
-type Dentro = 'modelos' | 'ficha-epi' | 'kits' | 'relatorio-atividades';
+type Dentro = 'modelos' | 'ficha-epi' | 'kits' | 'relatorio-atividades' | 'movimentacao-pessoal';
 
 interface Modelo {
   id: Dentro;
@@ -42,6 +43,13 @@ const MODELOS: Modelo[] = [
     nome: 'Relatório de Atividades',
     codigo: '001/2026',
     descricao: 'Preenche nome, CPF, função e data do executor a partir do Efetivo e gera o PDF.',
+    pronto: true,
+  },
+  {
+    id: 'movimentacao-pessoal',
+    nome: 'Movimentação de Pessoal — CLT',
+    codigo: 'FO-RH-12-V1',
+    descricao: 'Transferência, aumento, promoção ou férias. Puxa a situação atual do Efetivo e gera o PDF no mesmo formato do formulário.',
     pronto: true,
   },
 ];
@@ -91,6 +99,15 @@ export const SegurancaView: React.FC<Props> = ({ permissoes, onVoltar }) => {
   if (dentro === 'relatorio-atividades') {
     return (
       <RelatorioAtividadesView
+        permissoes={permissoes}
+        onVoltar={() => setDentro('modelos')}
+      />
+    );
+  }
+
+  if (dentro === 'movimentacao-pessoal') {
+    return (
+      <MovimentacaoPessoalView
         permissoes={permissoes}
         onVoltar={() => setDentro('modelos')}
       />
