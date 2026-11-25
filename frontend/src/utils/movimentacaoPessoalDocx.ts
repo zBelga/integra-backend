@@ -45,6 +45,20 @@ function dataBr(iso: string): string {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : '';
 }
 
+/** Valores em dinheiro sempre com R$ e duas casas (ex.: 3500 → R$ 3.500,00). */
+function dinheiro(valor: string): string {
+  const bruto = String(valor || '').trim();
+  if (!bruto) return '';
+  const semSimbolo = bruto.replace(/R\$/gi, '').replace(/\s+/g, '');
+  const normal = semSimbolo.includes(',')
+    ? semSimbolo.replace(/\./g, '').replace(',', '.')
+    : semSimbolo;
+  const n = Number(normal);
+  if (!Number.isFinite(n)) return bruto.startsWith('R$') ? bruto : `R$ ${bruto}`;
+  const fmt = n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return `R$ ${fmt}`;
+}
+
 function marcados(d: DadosMovimentacaoDocx): Set<string> {
   const on = new Set<string>();
   // Tipo: só transferência de obra
@@ -77,12 +91,12 @@ export async function gerarMovimentacaoPessoalDocx(d: DadosMovimentacaoDocx): Pr
     REGISTRO: d.registro,
     OBRA_ATUAL: d.departamento,
     CARGO_ATUAL: d.cargo,
-    SAL_ATUAL: d.salario,
+    SAL_ATUAL: dinheiro(d.salario),
     OBRA_NOVA: d.mudDepartamento,
     CARGO_NOVO: d.cargo,
-    SAL_NOVO: d.salario,
+    SAL_NOVO: dinheiro(d.salario),
     SUPERIOR: d.superiorImediato,
-    VALOR: d.valorProposto,
+    VALOR: dinheiro(d.valorProposto),
     FUNCAO: d.funcaoProposta,
     DATA_MUDANCA: dataBr(d.dataMudanca),
   };
