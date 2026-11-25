@@ -13,11 +13,9 @@ import type { Colaborador, PermissoesUsuario } from '../../types';
 import { podeNaTela } from '../../utils/permissoes';
 import { baixarBlob } from '../../utils/fichaEpiPdf';
 import {
-  gerarMovimentacaoPessoalPdf,
-  nomeArquivoMovimentacao,
-  type TipoMudanca,
-  type FeriasModo,
-} from '../../utils/movimentacaoPessoalPdf';
+  gerarMovimentacaoPessoalDocx,
+  nomeArquivoMovimentacaoDocx,
+} from '../../utils/movimentacaoPessoalDocx';
 
 const TELA = 'seguranca.epis';
 
@@ -69,7 +67,6 @@ export const MovimentacaoPessoalView: React.FC<Props> = ({ onVoltar, permissoes 
 
   // Mudança de situação
   // Este modelo é só para transferência de obra
-  const tipo: TipoMudanca = 'transferencia';
   const [mudDepartamento, setMudDepartamento] = useState('');
   const [mudCargo, setMudCargo] = useState('');
   const [mudSalario, setMudSalario] = useState('');
@@ -78,8 +75,6 @@ export const MovimentacaoPessoalView: React.FC<Props> = ({ onVoltar, permissoes 
   const [baseProposta, setBaseProposta] = useState<'' | 'mensal' | 'horario'>('');
   const [funcaoProposta, setFuncaoProposta] = useState('');
   const [dataMudanca, setDataMudanca] = useState(hojeIso());
-  const [dataFerias, setDataFerias] = useState('');
-  const [feriasModo, setFeriasModo] = useState<FeriasModo>('');
 
   // Cabeçalho
   const [elaboradoPor, setElaboradoPor] = useState('');
@@ -136,7 +131,7 @@ export const MovimentacaoPessoalView: React.FC<Props> = ({ onVoltar, permissoes 
 
     setGerando(true);
     try {
-      const blob = await gerarMovimentacaoPessoalPdf({
+      const blob = await gerarMovimentacaoPessoalDocx({
         elaboradoPor: elaboradoPor.trim(),
         dataFormulario,
         nome: nome.trim(),
@@ -145,20 +140,14 @@ export const MovimentacaoPessoalView: React.FC<Props> = ({ onVoltar, permissoes 
         cargo: cargo.trim(),
         salario: salario.trim(),
         baseMensal: baseAtual === '' ? null : baseAtual === 'mensal',
-        tipo,
-        mudDepartamento: mudDepartamento.trim(),
-        // Transferência de obra: cargo, salário e base não mudam, então vão os mesmos da situação atual
-        mudCargo: cargo.trim(),
-        mudSalario: salario.trim(),
         superiorImediato: superiorImediato.trim(),
-        valorProposto: salario.trim(),
-        mudBaseMensal: baseAtual === '' ? null : baseAtual === 'mensal',
-        funcaoProposta: cargo.trim(),
+        mudDepartamento: mudDepartamento.trim(),
         dataMudanca,
-        dataFerias: '',
-        feriasModo: '',
+        // Transferência de obra: cargo, salário e base não mudam
+        valorProposto: salario.trim(),
+        funcaoProposta: cargo.trim(),
       });
-      baixarBlob(blob, nomeArquivoMovimentacao(nome, dataFormulario));
+      baixarBlob(blob, nomeArquivoMovimentacaoDocx(nome, dataFormulario));
       setFeito(`Movimentação de ${nome.trim()} gerada.`);
     } catch (e: any) {
       setErro(e.message || 'Não foi possível gerar o PDF.');
