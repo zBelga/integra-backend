@@ -2,7 +2,7 @@
  * Movimentação de Pessoal — CLT (FO-RH-12).
  *
  * Usa o próprio Word do formulário (public/templates/movimentacao-pessoal-fo-rh-12.docx).
- * Só troca os campos preenchidos: {{CAMPO}} pelo valor e [[CK:chave]] por ☒ ou ☐.
+ * Só troca os campos azuis preenchidos ({{CAMPO}}). Os quadradinhos ficam como no modelo.
  * Não altera a estrutura do documento. Nada é gravado no banco.
  */
 import JSZip from 'jszip';
@@ -26,17 +26,6 @@ export interface DadosMovimentacaoDocx {
   funcaoProposta: string;
 }
 
-/** Chaves dos quadradinhos, na ordem em que aparecem no formulário. */
-const TODAS_CHAVES = [
-  'base_mensal', 'base_horario', 'mud', 'transferencia', 'aumento', 'promocao', 'ferias', 'outros',
-  'val_mensal', 'val_horario', 'ferias_20_10', 'ferias_30', 'cont', 'permanente', 'temporario',
-  'adicao', 'substituicao', 'novo', 'recontratacao', 'horista', 'mensalista', 'dem', 'sem_justa',
-  'pedido_dem', 'termino', 'sim', 'nao',
-  ...['conh', 'hab', 'assid', 'comp'].flatMap((l) =>
-    ['exc', 'bom', 'reg', 'insuf'].map((c) => `aval_${l}_${c}`),
-  ),
-];
-
 const escapeXml = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -57,23 +46,6 @@ function dinheiro(valor: string): string {
   if (!Number.isFinite(n)) return bruto.startsWith('R$') ? bruto : `R$ ${bruto}`;
   const fmt = n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return `R$ ${fmt}`;
-}
-
-function marcados(d: DadosMovimentacaoDocx): Set<string> {
-  const on = new Set<string>();
-  // Tipo: só transferência de obra
-  on.add('transferencia');
-  // Base de pagamento (situação atual e valor proposto são os mesmos)
-  if (d.baseMensal === true) {
-    on.add('base_mensal');
-    on.add('val_mensal');
-    on.add('mensalista');
-  } else if (d.baseMensal === false) {
-    on.add('base_horario');
-    on.add('val_horario');
-    on.add('horista');
-  }
-  return on;
 }
 
 export async function gerarMovimentacaoPessoalDocx(d: DadosMovimentacaoDocx): Promise<Blob> {
@@ -102,12 +74,7 @@ export async function gerarMovimentacaoPessoalDocx(d: DadosMovimentacaoDocx): Pr
   };
   xml = xml.replace(/\{\{([A-Z_]+)\}\}/g, (_, k: string) => escapeXml(campos[k] ?? ''));
 
-  const on = marcados(d);
-  xml = xml.replace(/\[\[CK:([a-z_]+)\]\]/g, (_, k: string) => {
-    const marcado = TODAS_CHAVES.includes(k) && on.has(k);
-    return marcado ? '☒' : '☐';
-  });
-
+  // Os quadradinhos (controles do próprio Word) ficam como estão no modelo.
   zip.file('word/document.xml', xml);
   return zip.generateAsync({
     type: 'blob',
