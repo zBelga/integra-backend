@@ -7,7 +7,8 @@
  */
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { ArrowLeft, Search, FileDown, AlertCircle, Loader2, CheckCircle2, X } from 'lucide-react';
-import { fetchColaboradores } from '../../services/api';
+import { fetchColaboradores, fetchObras } from '../../services/api';
+import type { Obra } from '../../types';
 import type { Colaborador, PermissoesUsuario } from '../../types';
 import { podeNaTela } from '../../utils/permissoes';
 import { baixarBlob } from '../../utils/fichaEpiPdf';
@@ -32,6 +33,14 @@ function hojeIso(): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
+/** Texto da obra como aparece no formulário: "OBRA 085 - NOME" */
+function rotuloObra(o: Obra): string {
+  const nome = String(o.nome || '').trim();
+  const codigo = String(o.codigo || '').trim();
+  if (/^OBRA\b/i.test(nome)) return nome.toUpperCase();
+  return codigo ? `OBRA ${codigo} - ${nome}`.toUpperCase() : nome.toUpperCase();
+}
+
 interface Props {
   onVoltar: () => void;
   permissoes?: PermissoesUsuario | null;
@@ -41,6 +50,7 @@ export const MovimentacaoPessoalView: React.FC<Props> = ({ onVoltar, permissoes 
   const podeGerar = podeNaTela(permissoes, TELA, 'ver');
 
   const [colaboradores, setColaboradores] = useState<Colaborador[]>([]);
+  const [obras, setObras] = useState<Obra[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState('');
   const [feito, setFeito] = useState('');
@@ -77,6 +87,9 @@ export const MovimentacaoPessoalView: React.FC<Props> = ({ onVoltar, permissoes 
 
   useEffect(() => {
     let ativo = true;
+    fetchObras()
+      .then(res => { if (ativo) setObras(res.data || []); })
+      .catch(() => { /* sem obras: o campo continua digitável */ });
     fetchColaboradores({ limit: 500, status: 'ativo' })
       .then(res => { if (ativo) setColaboradores(res.data || []); })
       .catch((e: any) => { if (ativo) setErro(e.message || 'Não foi possível carregar o efetivo.'); })
@@ -247,7 +260,12 @@ export const MovimentacaoPessoalView: React.FC<Props> = ({ onVoltar, permissoes 
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
           <label className="block sm:col-span-2"><span className={rotulo}>Departamento / Obra de destino</span>
-            <input value={mudDepartamento} onChange={e => setMudDepartamento(e.target.value)} className={classeCampo} /></label>
+            <select value={mudDepartamento} onChange={e => setMudDepartamento(e.target.value)} className={classeCampo}>
+              <option value="">{obras.length ? 'Escolha a obra' : 'Carregando obras…'}</option>
+              {obras.map(o => (
+                <option key={o.id} value={rotuloObra(o)}>{rotuloObra(o)}</option>
+              ))}
+            </select></label>
           <label className="block sm:col-span-2"><span className={rotulo}>Superior imediato</span>
             <input value={superiorImediato} onChange={e => setSuperiorImediato(e.target.value)} className={classeCampo} /></label>
           <label className="block"><span className={rotulo}>Data da mudança</span>
