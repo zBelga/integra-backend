@@ -32,14 +32,6 @@ function hojeIso(): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
-const TIPOS: { valor: TipoMudanca; rotulo: string }[] = [
-  { valor: 'transferencia', rotulo: 'Transferência' },
-  { valor: 'aumento', rotulo: 'Aumento de mérito' },
-  { valor: 'promocao', rotulo: 'Promoção' },
-  { valor: 'ferias', rotulo: 'Férias' },
-  { valor: 'outros', rotulo: 'Outros' },
-];
-
 interface Props {
   onVoltar: () => void;
   permissoes?: PermissoesUsuario | null;
@@ -66,8 +58,8 @@ export const MovimentacaoPessoalView: React.FC<Props> = ({ onVoltar, permissoes 
   const [baseAtual, setBaseAtual] = useState<'' | 'mensal' | 'horario'>('');
 
   // Mudança de situação
-  const [tipo, setTipo] = useState<TipoMudanca>('transferencia');
-  const ehTransferencia = tipo === 'transferencia';
+  // Este modelo é só para transferência de obra
+  const tipo: TipoMudanca = 'transferencia';
   const [mudDepartamento, setMudDepartamento] = useState('');
   const [mudCargo, setMudCargo] = useState('');
   const [mudSalario, setMudSalario] = useState('');
@@ -128,7 +120,6 @@ export const MovimentacaoPessoalView: React.FC<Props> = ({ onVoltar, permissoes 
   const gerar = async () => {
     setErro(''); setFeito('');
     if (!nome.trim()) return setErro('Escolha o colaborador no Efetivo.');
-    if (tipo === '') return setErro('Escolha o tipo de movimentação.');
 
     setGerando(true);
     try {
@@ -144,17 +135,15 @@ export const MovimentacaoPessoalView: React.FC<Props> = ({ onVoltar, permissoes 
         tipo,
         mudDepartamento: mudDepartamento.trim(),
         // Transferência de obra: cargo, salário e base não mudam, então vão os mesmos da situação atual
-        mudCargo: ehTransferencia ? cargo.trim() : mudCargo.trim(),
-        mudSalario: ehTransferencia ? salario.trim() : mudSalario.trim(),
+        mudCargo: cargo.trim(),
+        mudSalario: salario.trim(),
         superiorImediato: superiorImediato.trim(),
-        valorProposto: ehTransferencia ? salario.trim() : valorProposto.trim(),
-        mudBaseMensal: ehTransferencia
-          ? (baseAtual === '' ? null : baseAtual === 'mensal')
-          : (baseProposta === '' ? null : baseProposta === 'mensal'),
-        funcaoProposta: ehTransferencia ? cargo.trim() : funcaoProposta.trim(),
+        valorProposto: salario.trim(),
+        mudBaseMensal: baseAtual === '' ? null : baseAtual === 'mensal',
+        funcaoProposta: cargo.trim(),
         dataMudanca,
-        dataFerias: ehTransferencia ? '' : dataFerias,
-        feriasModo: tipo === 'ferias' ? feriasModo : '',
+        dataFerias: '',
+        feriasModo: '',
       });
       baixarBlob(blob, nomeArquivoMovimentacao(nome, dataFormulario));
       setFeito(`Movimentação de ${nome.trim()} gerada.`);
@@ -256,20 +245,6 @@ export const MovimentacaoPessoalView: React.FC<Props> = ({ onVoltar, permissoes 
       <section className="mt-5 border border-[#DDE3E8] rounded-xl p-5 bg-white">
         <h2 className="text-sm font-bold text-[#17212B] mb-4">2. Mudança de situação</h2>
 
-        <div className="flex flex-wrap gap-2">
-          {TIPOS.map(t => (
-            <button
-              key={t.valor}
-              onClick={() => setTipo(t.valor)}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-lg border cursor-pointer transition-colors ${
-                tipo === t.valor ? 'bg-[#176B87] text-white border-[#176B87]' : 'bg-white text-[#17212B] border-[#DDE3E8] hover:bg-[#F0F7F9]'
-              }`}
-            >
-              {t.rotulo}
-            </button>
-          ))}
-        </div>
-
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
           <label className="block sm:col-span-2"><span className={rotulo}>Departamento / Obra de destino</span>
             <input value={mudDepartamento} onChange={e => setMudDepartamento(e.target.value)} className={classeCampo} /></label>
@@ -279,36 +254,6 @@ export const MovimentacaoPessoalView: React.FC<Props> = ({ onVoltar, permissoes 
             <input type="date" value={dataMudanca} onChange={e => setDataMudanca(e.target.value)} className={classeCampo} /></label>
         </div>
 
-        {!ehTransferencia && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 pt-4 border-t border-[#EEF1F4]">
-            <label className="block"><span className={rotulo}>Cargo proposto</span>
-              <input value={mudCargo} onChange={e => setMudCargo(e.target.value)} className={classeCampo} /></label>
-            <label className="block"><span className={rotulo}>Salário proposto</span>
-              <input value={mudSalario} onChange={e => setMudSalario(e.target.value)} placeholder="R$ 0,00" className={classeCampo} /></label>
-            <label className="block"><span className={rotulo}>Valor proposto</span>
-              <input value={valorProposto} onChange={e => setValorProposto(e.target.value)} placeholder="R$ 0,00" className={classeCampo} /></label>
-            <label className="block"><span className={rotulo}>Base proposta</span>
-              <select value={baseProposta} onChange={e => setBaseProposta(e.target.value as any)} className={classeCampo}>
-                <option value="">Não informar</option>
-                <option value="mensal">Mensal</option>
-                <option value="horario">Horário</option>
-              </select></label>
-            <label className="block sm:col-span-2"><span className={rotulo}>Função proposta</span>
-              <input value={funcaoProposta} onChange={e => setFuncaoProposta(e.target.value)} className={classeCampo} /></label>
-            {tipo === 'ferias' && (
-              <>
-                <label className="block"><span className={rotulo}>Data para férias</span>
-                  <input type="date" value={dataFerias} onChange={e => setDataFerias(e.target.value)} className={classeCampo} /></label>
-                <label className="block"><span className={rotulo}>Modo das férias</span>
-                  <select value={feriasModo} onChange={e => setFeriasModo(e.target.value as FeriasModo)} className={classeCampo}>
-                    <option value="">Não marcar</option>
-                    <option value="20+10">20 dias + 10 de abono</option>
-                    <option value="30">30 dias</option>
-                  </select></label>
-              </>
-            )}
-          </div>
-        )}
       </section>
 
       {/* Cabeçalho do formulário */}
