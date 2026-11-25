@@ -67,6 +67,7 @@ export const MovimentacaoPessoalView: React.FC<Props> = ({ onVoltar, permissoes 
 
   // Mudança de situação
   const [tipo, setTipo] = useState<TipoMudanca>('transferencia');
+  const ehTransferencia = tipo === 'transferencia';
   const [mudDepartamento, setMudDepartamento] = useState('');
   const [mudCargo, setMudCargo] = useState('');
   const [mudSalario, setMudSalario] = useState('');
@@ -142,14 +143,17 @@ export const MovimentacaoPessoalView: React.FC<Props> = ({ onVoltar, permissoes 
         baseMensal: baseAtual === '' ? null : baseAtual === 'mensal',
         tipo,
         mudDepartamento: mudDepartamento.trim(),
-        mudCargo: mudCargo.trim(),
-        mudSalario: mudSalario.trim(),
+        // Transferência de obra: cargo, salário e base não mudam, então vão os mesmos da situação atual
+        mudCargo: ehTransferencia ? cargo.trim() : mudCargo.trim(),
+        mudSalario: ehTransferencia ? salario.trim() : mudSalario.trim(),
         superiorImediato: superiorImediato.trim(),
-        valorProposto: valorProposto.trim(),
-        mudBaseMensal: baseProposta === '' ? null : baseProposta === 'mensal',
-        funcaoProposta: funcaoProposta.trim(),
+        valorProposto: ehTransferencia ? salario.trim() : valorProposto.trim(),
+        mudBaseMensal: ehTransferencia
+          ? (baseAtual === '' ? null : baseAtual === 'mensal')
+          : (baseProposta === '' ? null : baseProposta === 'mensal'),
+        funcaoProposta: ehTransferencia ? cargo.trim() : funcaoProposta.trim(),
         dataMudanca,
-        dataFerias,
+        dataFerias: ehTransferencia ? '' : dataFerias,
         feriasModo: tipo === 'ferias' ? feriasModo : '',
       });
       baixarBlob(blob, nomeArquivoMovimentacao(nome, dataFormulario));
@@ -269,35 +273,42 @@ export const MovimentacaoPessoalView: React.FC<Props> = ({ onVoltar, permissoes 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
           <label className="block sm:col-span-2"><span className={rotulo}>Departamento / Obra de destino</span>
             <input value={mudDepartamento} onChange={e => setMudDepartamento(e.target.value)} className={classeCampo} /></label>
-          <label className="block"><span className={rotulo}>Cargo proposto</span>
-            <input value={mudCargo} onChange={e => setMudCargo(e.target.value)} className={classeCampo} /></label>
-          <label className="block"><span className={rotulo}>Salário proposto</span>
-            <input value={mudSalario} onChange={e => setMudSalario(e.target.value)} placeholder="R$ 0,00" className={classeCampo} /></label>
           <label className="block sm:col-span-2"><span className={rotulo}>Superior imediato</span>
             <input value={superiorImediato} onChange={e => setSuperiorImediato(e.target.value)} className={classeCampo} /></label>
-          <label className="block"><span className={rotulo}>Valor proposto</span>
-            <input value={valorProposto} onChange={e => setValorProposto(e.target.value)} placeholder="R$ 0,00" className={classeCampo} /></label>
-          <label className="block"><span className={rotulo}>Base proposta</span>
-            <select value={baseProposta} onChange={e => setBaseProposta(e.target.value as any)} className={classeCampo}>
-              <option value="">Não informar</option>
-              <option value="mensal">Mensal</option>
-              <option value="horario">Horário</option>
-            </select></label>
-          <label className="block"><span className={rotulo}>Função proposta</span>
-            <input value={funcaoProposta} onChange={e => setFuncaoProposta(e.target.value)} className={classeCampo} /></label>
           <label className="block"><span className={rotulo}>Data da mudança</span>
             <input type="date" value={dataMudanca} onChange={e => setDataMudanca(e.target.value)} className={classeCampo} /></label>
-          <label className="block"><span className={rotulo}>Data para férias</span>
-            <input type="date" value={dataFerias} onChange={e => setDataFerias(e.target.value)} className={classeCampo} /></label>
-          {tipo === 'ferias' && (
-            <label className="block"><span className={rotulo}>Modo das férias</span>
-              <select value={feriasModo} onChange={e => setFeriasModo(e.target.value as FeriasModo)} className={classeCampo}>
-                <option value="">Não marcar</option>
-                <option value="20+10">20 dias + 10 de abono</option>
-                <option value="30">30 dias</option>
-              </select></label>
-          )}
         </div>
+
+        {!ehTransferencia && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 pt-4 border-t border-[#EEF1F4]">
+            <label className="block"><span className={rotulo}>Cargo proposto</span>
+              <input value={mudCargo} onChange={e => setMudCargo(e.target.value)} className={classeCampo} /></label>
+            <label className="block"><span className={rotulo}>Salário proposto</span>
+              <input value={mudSalario} onChange={e => setMudSalario(e.target.value)} placeholder="R$ 0,00" className={classeCampo} /></label>
+            <label className="block"><span className={rotulo}>Valor proposto</span>
+              <input value={valorProposto} onChange={e => setValorProposto(e.target.value)} placeholder="R$ 0,00" className={classeCampo} /></label>
+            <label className="block"><span className={rotulo}>Base proposta</span>
+              <select value={baseProposta} onChange={e => setBaseProposta(e.target.value as any)} className={classeCampo}>
+                <option value="">Não informar</option>
+                <option value="mensal">Mensal</option>
+                <option value="horario">Horário</option>
+              </select></label>
+            <label className="block sm:col-span-2"><span className={rotulo}>Função proposta</span>
+              <input value={funcaoProposta} onChange={e => setFuncaoProposta(e.target.value)} className={classeCampo} /></label>
+            {tipo === 'ferias' && (
+              <>
+                <label className="block"><span className={rotulo}>Data para férias</span>
+                  <input type="date" value={dataFerias} onChange={e => setDataFerias(e.target.value)} className={classeCampo} /></label>
+                <label className="block"><span className={rotulo}>Modo das férias</span>
+                  <select value={feriasModo} onChange={e => setFeriasModo(e.target.value as FeriasModo)} className={classeCampo}>
+                    <option value="">Não marcar</option>
+                    <option value="20+10">20 dias + 10 de abono</option>
+                    <option value="30">30 dias</option>
+                  </select></label>
+              </>
+            )}
+          </div>
+        )}
       </section>
 
       {/* Cabeçalho do formulário */}
