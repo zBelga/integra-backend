@@ -69,13 +69,13 @@ function campo(doc: any, x: number, y: number, w: number, h: number, rotulo: str
   retangulo(doc, x, y, w, h);
   doc.setTextColor(...PRETO);
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(6.5);
-  doc.text(rotulo, x + 1.5, y + 3.2);
+  doc.setFontSize(6);
+  doc.text(rotulo, x + 1.5, y + 2.6);
   if (valor) {
     doc.setFont('helvetica', 'bolditalic');
-    doc.setFontSize(9);
+    doc.setFontSize(8.5);
     doc.setTextColor(...AZUL_VALOR);
-    doc.text(valor, x + 2, y + h - 2.2);
+    doc.text(valor, x + 2, y + h - 1.4);
   }
 }
 
@@ -108,13 +108,13 @@ function rotuloSecao(doc: any, y: number, h: number, titulo: string, cor: [numbe
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
   doc.setTextColor(...cor);
-  doc.text(titulo, centroX + 1.2, meioY + doc.getTextWidth(titulo) / 2, { angle: 90 });
+  doc.text(titulo, centroX - 0.4, meioY + doc.getTextWidth(titulo) / 2, { angle: 90 });
 
   if (subtitulo) {
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(5.5);
+    doc.setFontSize(5);
     doc.setTextColor(...PRETO);
-    doc.text(subtitulo, centroX + 4.6, meioY + doc.getTextWidth(subtitulo) / 2, { angle: 90 });
+    doc.text(subtitulo, centroX + 2.8, meioY + doc.getTextWidth(subtitulo) / 2, { angle: 90 });
   }
 }
 
